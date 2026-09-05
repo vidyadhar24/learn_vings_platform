@@ -13,9 +13,9 @@ import sys
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from config import DEFAULT_USER_ID
+from backend.app.config import DEFAULT_USER_ID
 from db import SessionLocal, init_db
-from db_models import Question, Tag, QuestionTag
+from backend.app.db_models import Question, Tag, QuestionTag
 from schemas_input import MCQInput, QnAInput
 
 MODEL_BY_TYPE = {"mcq": MCQInput, "qna": QnAInput}

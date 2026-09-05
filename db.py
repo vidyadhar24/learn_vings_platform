@@ -1,8 +1,8 @@
 """Engine + session factory, and a helper to create all tables."""
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from config import DATABASE_URL
-from db_models import Base
+from backend.app.config import DATABASE_URL
+from backend.app.db_models import Base
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
