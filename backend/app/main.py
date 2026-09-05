@@ -31,7 +31,10 @@ app = FastAPI(title="Learning Platform API")
 # rule, not something Python enforces on its own.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite's default dev port
+    allow_origins=[
+        "http://localhost:5173",              # local dev (Vite)
+        "https://vings-learning-platform.onrender.com", # replace with your actual Render Static Site URL
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
