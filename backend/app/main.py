@@ -6,15 +6,16 @@ round trip (HTTP -> DB session -> query -> response) so we can confirm the
 whole stack works before building the more complex quiz/prepare endpoints.
 """
 from typing import Optional
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select, distinct, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .database import get_db
-from .db_models import Question
+from .db_models import Question, QuizAttempt, QuizAttemptAnswer, Tag, QuestionTag
 from .schemas_output import QuizQuestionOut, PrepareQuestionOut
 from .schemas_quiz import QuizSubmitIn, QuizSubmitOut, QuizAnswerReview
-from .db_models import QuizAttempt, QuizAttemptAnswer
+from .schemas_tags import TagOut, TagAssignIn, FavouriteIn
 from .config import DEFAULT_USER_ID
 
 app = FastAPI(title="Learning Platform API")
@@ -139,3 +140,66 @@ def submit_quiz(submission: QuizSubmitIn, db: Session = Depends(get_db)):
     db.commit()
 
     return QuizSubmitOut(attempt_id=attempt.id, score=score, total=len(submission.answers), review=review)
+
+
+def _get_question_or_404(db: Session, question_id: str) -> Question:
+    """Shared lookup used by every per-question endpoint below."""
+    q = db.get(Question, question_id)
+    if q is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    return q
+
+
+@app.post("/questions/{question_id}/tags", response_model=TagOut)
+def assign_tag(question_id: str, body: TagAssignIn, db: Session = Depends(get_db)):
+    """Creates the tag if it's new (this is what lets a user type a fresh
+    tag name in the UI), then links it to the question for DEFAULT_USER_ID.
+    on_conflict_do_nothing makes re-assigning the same tag a harmless no-op."""
+    _get_question_or_404(db, question_id)
+
+    db.execute(pg_insert(Tag).values(name=body.name).on_conflict_do_nothing(index_elements=["name"]))
+    tag = db.execute(select(Tag).where(Tag.name == body.name)).scalar_one()
+
+    db.execute(pg_insert(QuestionTag).values(
+        question_id=question_id, tag_id=tag.id, user_id=DEFAULT_USER_ID
+    ).on_conflict_do_nothing(index_elements=["question_id", "tag_id", "user_id"]))
+    db.commit()
+    return TagOut(id=tag.id, name=tag.name)
+
+
+@app.get("/questions/{question_id}/tags", response_model=list[TagOut])
+def list_question_tags(question_id: str, db: Session = Depends(get_db)):
+    """Tags currently attached to one question, for DEFAULT_USER_ID."""
+    stmt = (
+        select(Tag)
+        .join(QuestionTag, QuestionTag.tag_id == Tag.id)
+        .where(QuestionTag.question_id == question_id, QuestionTag.user_id == DEFAULT_USER_ID)
+    )
+    tags = db.execute(stmt).scalars().all()
+    return [TagOut(id=t.id, name=t.name) for t in tags]
+
+
+@app.delete("/questions/{question_id}/tags/{tag_id}", status_code=204)
+def remove_tag(question_id: str, tag_id: int, db: Session = Depends(get_db)):
+    """Un-tagging a question — deletes just this user's link, not the tag itself
+    (the tag may still be attached to other questions)."""
+    stmt = select(QuestionTag).where(
+        QuestionTag.question_id == question_id,
+        QuestionTag.tag_id == tag_id,
+        QuestionTag.user_id == DEFAULT_USER_ID,
+    )
+    link = db.execute(stmt).scalar_one_or_none()
+    if link:
+        db.delete(link)
+        db.commit()
+
+
+@app.patch("/questions/{question_id}/favourite")
+def set_favourite(question_id: str, body: FavouriteIn, db: Session = Depends(get_db)):
+    """Toggles favourite on/off. Currently a plain column on Question since
+    it's single-user; if multi-account lands, this moves to a per-user table
+    the same way tags did."""
+    q = _get_question_or_404(db, question_id)
+    q.favourite = body.favourite
+    db.commit()
+    return {"id": q.id, "favourite": q.favourite}
