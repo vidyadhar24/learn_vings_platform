@@ -28,11 +28,15 @@ class QuizSubmitIn(BaseModel):
 
 class QuizAnswerReview(BaseModel):
     """Per-question result shown on the results screen — correct answer
-    and explanation are revealed here since grading already happened."""
+    and explanation are revealed here since grading already happened.
+    Includes both the option id and its text, since an id alone ("b")
+    means nothing to the user without the option list."""
     question_id: str
     question: str
     selected_option: str
+    selected_text: str
     correct_option: str
+    correct_text: str
     is_correct: bool
     explanation: Optional[str]
 

@@ -50,6 +50,14 @@ export function assignTag(questionId, name) {
   });
 }
 
+export async function uploadJsonl(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${BASE_URL}/admin/load`, { method: "POST", body: formData });
+  if (!res.ok) throw new Error(`Upload failed with status ${res.status}`);
+  return res.json();
+}
+
 export function setFavourite(questionId, favourite) {
   return request(`/questions/${questionId}/favourite`, {
     method: "PATCH",

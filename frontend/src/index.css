@@ -126,6 +126,16 @@ select, input[type="number"], input[type="text"] {
   background: #e4dfc8;
 }
 
+.pill-btn:disabled {
+  color: var(--ink-muted);
+  cursor: not-allowed;
+  background: #EFEAD9;
+}
+
+.pill-btn:disabled:hover {
+  background: #EFEAD9;
+}
+
 .pill-btn.active {
   background: var(--accent);
   border-color: var(--accent);

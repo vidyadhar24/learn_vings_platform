@@ -5,8 +5,9 @@ FastAPI entrypoint. Run with: uvicorn app.main:app --reload
 round trip (HTTP -> DB session -> query -> response) so we can confirm the
 whole stack works before building the more complex quiz/prepare endpoints.
 """
+import json
 from typing import Optional
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import select, distinct, func
@@ -18,7 +19,10 @@ from .schemas_output import QuizQuestionOut, PrepareQuestionOut
 from .schemas_quiz import QuizSubmitIn, QuizSubmitOut, QuizAnswerReview
 from .schemas_tags import TagOut, TagAssignIn, FavouriteIn
 from .schemas_browse import QuestionSummaryOut
+from .schemas_input import MCQInput, QnAInput
 from .config import DEFAULT_USER_ID
+
+MODEL_BY_TYPE = {"mcq": MCQInput, "qna": QnAInput}
 
 app = FastAPI(title="Learning Platform API")
 
@@ -126,9 +130,16 @@ def submit_quiz(submission: QuizSubmitIn, db: Session = Depends(get_db)):
         correct_option = q.payload["correct_option"]
         is_correct = ans.selected_option == correct_option
         score += int(is_correct)
+
+        # Options are stored as [{"id": "a", "text": "..."}], so build a
+        # quick id->text lookup to resolve both the user's pick and the
+        # correct one into readable text for the results screen.
+        option_text_by_id = {opt["id"]: opt["text"] for opt in q.payload["options"]}
+
         review.append(QuizAnswerReview(
             question_id=q.id, question=q.question,
-            selected_option=ans.selected_option, correct_option=correct_option,
+            selected_option=ans.selected_option, selected_text=option_text_by_id.get(ans.selected_option, ""),
+            correct_option=correct_option, correct_text=option_text_by_id.get(correct_option, ""),
             is_correct=is_correct, explanation=q.payload.get("explanation"),
         ))
 
@@ -241,3 +252,68 @@ def list_by_tag(tag_id: int, db: Session = Depends(get_db)):
     )
     rows = db.execute(stmt).scalars().all()
     return [QuestionSummaryOut.from_question(q) for q in rows]
+
+
+@app.post("/admin/load")
+async def admin_load_jsonl(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Same job as loader/load.py, but over HTTP instead of a local script —
+    useful once the app is deployed and you don't have a terminal handy
+    with DATABASE_URL pointed at production.
+
+    Every line is validated and upserted independently: one bad line
+    doesn't abort the rest of the file, and every failure is reported
+    back with its line number and the actual error, rather than being
+    silently skipped.
+    """
+    raw_bytes = await file.read()
+    lines = raw_bytes.decode("utf-8").splitlines()
+
+    loaded, errors = 0, []
+
+    for line_no, line in enumerate(lines, start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            raw = json.loads(line)
+            model_cls = MODEL_BY_TYPE.get(raw.get("type"))
+            if model_cls is None:
+                raise ValueError(f"Unknown or missing type: {raw.get('type')!r}")
+            parsed = model_cls(**raw)
+            payload = parsed.to_payload()
+
+            # Insert new, or update content only — rating/favourite/duplicate
+            # are left alone on conflict, same rule as the standalone loader.
+            stmt = pg_insert(Question).values(
+                id=parsed.id, type=parsed.type, category=parsed.category,
+                subcategory=parsed.subcategory, topic=parsed.topic,
+                difficulty=parsed.difficulty, question=parsed.question,
+                payload=payload, source=parsed.source, source_url=parsed.source_url,
+                favourite=False, duplicate=False,
+            )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["id"],
+                set_={
+                    "type": stmt.excluded.type, "category": stmt.excluded.category,
+                    "subcategory": stmt.excluded.subcategory, "topic": stmt.excluded.topic,
+                    "difficulty": stmt.excluded.difficulty, "question": stmt.excluded.question,
+                    "payload": stmt.excluded.payload, "source": stmt.excluded.source,
+                    "source_url": stmt.excluded.source_url,
+                },
+            )
+            db.execute(stmt)
+
+            for tag_name in parsed.tags:
+                db.execute(pg_insert(Tag).values(name=tag_name).on_conflict_do_nothing(index_elements=["name"]))
+                tag = db.execute(select(Tag).where(Tag.name == tag_name)).scalar_one()
+                db.execute(pg_insert(QuestionTag).values(
+                    question_id=parsed.id, tag_id=tag.id, user_id=DEFAULT_USER_ID
+                ).on_conflict_do_nothing(index_elements=["question_id", "tag_id", "user_id"]))
+
+            loaded += 1
+        except Exception as e:
+            errors.append({"line": line_no, "error": str(e)})
+
+    db.commit()
+    return {"loaded": loaded, "failed": len(errors), "errors": errors}

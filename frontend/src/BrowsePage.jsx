@@ -1,10 +1,22 @@
 import { useState, useEffect } from "react";
 import { getFavourites, getAllTags, getQuestionsByTag, setFavourite, assignTag } from "./api";
 
+// Same reasoning as PreparePage.jsx: answers are written one point per line,
+// but HTML collapses raw "\n" in a <p>, so this splits and renders <li>s.
+function AnswerText({ answer }) {
+  const lines = answer.split("\n").map((l) => l.replace(/^-\s*/, "").trim()).filter(Boolean);
+  if (lines.length <= 1) return <p className="question-text">{answer}</p>;
+  return (
+    <ul className="question-text" style={{ paddingLeft: 20 }}>
+      {lines.map((line, i) => <li key={i}>{line}</li>)}
+    </ul>
+  );
+}
+
 // Two tabs sharing one layout: "Favourites" needs no extra input, "By tag"
 // needs a tag picked first. Both end up rendering the same BrowseItem list.
 export default function BrowsePage({ onExit }) {
-  const [tab, setTab] = useState("favourites"); // "favourites" | "tag"
+  const [tab, setTab] = useState(null); // null = nothing chosen yet | "favourites" | "tag"
   const [tags, setTags] = useState([]);
   const [selectedTagId, setSelectedTagId] = useState("");
   const [items, setItems] = useState(null); // null = not loaded yet for this view
@@ -13,13 +25,15 @@ export default function BrowsePage({ onExit }) {
     getAllTags().then((data) => setTags(data));
   }, []);
 
-  useEffect(() => {
-    if (tab === "favourites") {
+  function handleTabClick(nextTab) {
+    setTab(nextTab);
+    setItems(null);
+    setSelectedTagId("");
+    if (nextTab === "favourites") {
       getFavourites().then(setItems);
-    } else {
-      setItems(null); // wait for a tag to be picked before fetching
     }
-  }, [tab]);
+    // "tag" tab waits for a tag to actually be picked before fetching
+  }
 
   function handleTagPick(tagId) {
     setSelectedTagId(tagId);
@@ -29,15 +43,15 @@ export default function BrowsePage({ onExit }) {
   return (
     <div className="card-stack">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button className="btn-secondary" onClick={onExit}>Home</button>
+        <button className="pill-btn" onClick={onExit}>Home</button>
         <h2 style={{ fontFamily: "var(--font-serif)", margin: 0 }}>Browse</h2>
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <button className="btn-secondary" onClick={() => setTab("favourites")} disabled={tab === "favourites"}>
+        <button className={`pill-btn ${tab === "favourites" ? "active" : ""}`} onClick={() => handleTabClick("favourites")}>
           Favourites
         </button>{" "}
-        <button className="btn-secondary" onClick={() => setTab("tag")} disabled={tab === "tag"}>
+        <button className={`pill-btn ${tab === "tag" ? "active" : ""}`} onClick={() => handleTabClick("tag")}>
           By tag
         </button>
       </div>
@@ -49,7 +63,8 @@ export default function BrowsePage({ onExit }) {
         </select>
       )}
 
-      {items === null && tab === "favourites" && <p>Loading...</p>}
+      {tab === null && <p style={{ color: "var(--ink-muted)", marginTop: 16 }}>Choose Favourites or By tag to begin.</p>}
+      {tab && items === null && <p style={{ marginTop: 16 }}>Loading...</p>}
       {items !== null && items.length === 0 && <p style={{ color: "var(--ink-muted)" }}>Nothing here yet.</p>}
       {items && items.map((q) => <BrowseItem key={q.id} question={q} />)}
     </div>
@@ -74,11 +89,11 @@ function BrowseItem({ question }) {
   }
 
   return (
-    <div style={{ margin: "16px 0", paddingBottom: 16, borderBottom: "1px solid #e4dfd0" }}>
+    <div style={{ margin: "16px 0", padding: 16, borderRadius: 4, background: "#EFEAD9" }}>
       <p className="question-text" style={{ fontWeight: 600 }}>{question.question}</p>
 
       {!revealed ? (
-        <button className="btn-secondary" onClick={() => setRevealed(true)}>Show answer</button>
+        <button className="pill-btn" onClick={() => setRevealed(true)}>Show answer</button>
       ) : question.type === "mcq" ? (
         <ul>
           {question.payload.options.map((opt) => (
@@ -89,7 +104,7 @@ function BrowseItem({ question }) {
         </ul>
       ) : (
         <>
-          <p className="question-text">{question.payload.answer}</p>
+          <AnswerText answer={question.payload.answer} />
           {question.payload.code && (
             <pre style={{ background: "#EFEAD9", padding: 12, overflowX: "auto" }}>{question.payload.code}</pre>
           )}

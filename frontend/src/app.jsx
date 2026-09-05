@@ -3,6 +3,7 @@ import { getCategories, getSubcategories, getTopics } from "./api";
 import QuizPage from "./QuizPage";
 import PreparePage from "./PreparePage";
 import BrowsePage from "./BrowsePage";
+import AdminUploadPage from "./AdminUploadPage";
 
 // This component owns the filter selection UI, shared by both modes.
 // Once the user hits "Start", we hand the chosen filters + mode down
@@ -21,10 +22,14 @@ export default function App() {
 
   const [started, setStarted] = useState(false);
 
-  // Load categories once, on first render.
+  // Refetch categories on first mount AND every time the user returns to
+  // Home (mode goes back to null) — otherwise newly uploaded categories
+  // wouldn't show up until a full page reload.
   useEffect(() => {
-    getCategories().then((data) => setCategories(data.categories));
-  }, []);
+    if (mode === null) {
+      getCategories().then((data) => setCategories(data.categories));
+    }
+  }, [mode]);
 
   // Re-fetch subcategories whenever the chosen category changes.
   useEffect(() => {
@@ -54,6 +59,9 @@ export default function App() {
     // so it renders immediately instead of going through the filter step.
     return <BrowsePage onExit={() => setMode(null)} />;
   }
+  if (mode === "admin") {
+    return <AdminUploadPage onExit={() => setMode(null)} />;
+  }
 
   return (
     <div className="card-stack">
@@ -62,7 +70,8 @@ export default function App() {
       <div>
         <button className="btn" onClick={() => setMode("quiz")} disabled={mode === "quiz"}>Quiz</button>{" "}
         <button className="btn" onClick={() => setMode("prepare")} disabled={mode === "prepare"}>Prepare</button>{" "}
-        <button className="btn" onClick={() => setMode("browse")}>Browse</button>
+        <button className="btn" onClick={() => setMode("browse")}>Browse</button>{" "}
+        <button className="btn" onClick={() => setMode("admin")}>Load Data</button>
       </div>
 
       {mode && (

@@ -115,7 +115,7 @@ function ReviewItem({ review: r }) {
     >
       <p className="question-text">{r.question}</p>
       <p className={r.is_correct ? "correct" : "incorrect"}>
-        Your answer: {r.selected_option} {r.is_correct ? "(correct)" : `(correct: ${r.correct_option})`}
+        Your answer: {r.selected_text} {r.is_correct ? "(correct)" : `(correct: ${r.correct_text})`}
       </p>
       {r.explanation && <p style={{ color: "var(--ink-muted)" }}><em>{r.explanation}</em></p>}
 

@@ -3,11 +3,11 @@
 Edit only this block, then paste the whole thing into any LLM:
 
 ```
-CATEGORY = Date Engineering 
-SUBCATEGORY = PySpark
-TOPIC = Optimizations
+CATEGORY = 
+SUBCATEGORY = 
+TOPIC = 
 NUMBER_OF_QUESTIONS = 20
-DIFFICULTY = Easy        # one of: easy | medium | hard | mixed
+DIFFICULTY = mixed        # one of: easy | medium | hard | mixed
 ```
 
 ---
@@ -19,6 +19,7 @@ You are generating Q&A study material (for a "Prepare/deep-dive" mode) for a lea
 - If a fact might have changed recently (version numbers, current best practices, deprecated features), either skip it or clearly caveat it in the answer.
 - Before finalizing each question, silently re-check it: is the answer actually correct and complete? Discard and replace any question that fails this check.
 - Do not invent code examples that wouldn't actually run or compile — every `code` field must be realistic, syntactically correct, idiomatic code for TOPIC.
+- Write the `answer` field as multiple short bullet points rather than one long paragraph: separate each point with a newline (`\n`) and prefix each with `- `. This makes it scannable when read as a study card rather than a wall of text.
 
 **Audience — write for two purposes at once:**
 1. Someone building real hands-on expertise in TOPIC — answers should teach the underlying concept in depth, not just state a fact.

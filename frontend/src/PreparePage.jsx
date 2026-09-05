@@ -1,6 +1,20 @@
 import { useState, useEffect } from "react";
 import { getPrepareQuestions, setFavourite, assignTag } from "./api";
 
+// Answers are written with one point per line (see prompt-qna.md). Splitting
+// on "\n" and rendering as <li> is what actually turns that into a visible
+// bullet list — HTML collapses raw newlines in a <p>, so this step is required
+// even though the source text is already formatted with "- " per line.
+function AnswerText({ answer }) {
+  const lines = answer.split("\n").map((l) => l.replace(/^-\s*/, "").trim()).filter(Boolean);
+  if (lines.length <= 1) return <p className="question-text">{answer}</p>;
+  return (
+    <ul className="question-text" style={{ paddingLeft: 20 }}>
+      {lines.map((line, i) => <li key={i}>{line}</li>)}
+    </ul>
+  );
+}
+
 export default function PreparePage({ filters, onExit }) {
   const [questions, setQuestions] = useState(null); // null = still loading, [] = loaded but empty
   const [index, setIndex] = useState(0);
@@ -27,7 +41,7 @@ export default function PreparePage({ filters, onExit }) {
   return (
     <div className="card-stack">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button className="btn-secondary" onClick={onExit}>Home</button>
+        <button className="pill-btn" onClick={onExit}>Home</button>
         <p className="counter" style={{ margin: 0 }}>Question {index + 1} of {questions.length}</p>
       </div>
       <div className="progress-line">
@@ -39,7 +53,7 @@ export default function PreparePage({ filters, onExit }) {
       <QuestionCard key={current.id} question={current} />
 
       <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
-        <button className="btn-secondary" onClick={() => setIndex(index - 1)} disabled={isFirst}>
+        <button className="pill-btn" onClick={() => setIndex(index - 1)} disabled={isFirst}>
           ← Previous
         </button>
         <button className="btn" onClick={() => setIndex(index + 1)} disabled={isLast}>
@@ -73,10 +87,10 @@ function QuestionCard({ question }) {
       <p className="question-text" style={{ fontWeight: 600 }}>{question.question}</p>
 
       {!revealed ? (
-        <button className="btn-secondary" onClick={() => setRevealed(true)}>Show answer</button>
+        <button className="pill-btn" onClick={() => setRevealed(true)}>Show answer</button>
       ) : (
         <>
-          <p className="question-text">{question.answer}</p>
+          <AnswerText answer={question.answer} />
           {question.examples.length > 0 && (
             <ul style={{ color: "var(--ink-muted)" }}>{question.examples.map((ex, i) => <li key={i}>{ex}</li>)}</ul>
           )}
