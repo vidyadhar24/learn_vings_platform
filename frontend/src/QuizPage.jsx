@@ -34,45 +34,47 @@ export default function QuizPage({ filters, onExit }) {
 
   if (result) {
     return (
-      <div style={{ maxWidth: 480, margin: "40px auto", fontFamily: "sans-serif" }}>
-        <h2>Score: {result.score} / {result.total}</h2>
+      <div className="card-stack">
+        <h2 style={{ fontFamily: "var(--font-serif)", marginTop: 0 }}>Score: {result.score} / {result.total}</h2>
         {result.review.map((r) => (
-          <div key={r.question_id} style={{ margin: "12px 0", padding: 8, border: "1px solid #ccc" }}>
-            <p>{r.question}</p>
-            <p style={{ color: r.is_correct ? "green" : "red" }}>
+          <div key={r.question_id} style={{ margin: "16px 0", paddingBottom: 16, borderBottom: "1px solid #e4dfd0" }}>
+            <p className="question-text">{r.question}</p>
+            <p className={r.is_correct ? "correct" : "incorrect"}>
               Your answer: {r.selected_option} {r.is_correct ? "(correct)" : `(correct: ${r.correct_option})`}
             </p>
-            {r.explanation && <p><em>{r.explanation}</em></p>}
-            <button onClick={() => setFavourite(r.question_id, true)}>Favourite</button>
+            {r.explanation && <p style={{ color: "var(--ink-muted)" }}><em>{r.explanation}</em></p>}
+            <button className="btn-secondary" onClick={() => setFavourite(r.question_id, true)}>Favourite</button>
           </div>
         ))}
-        <button onClick={onExit}>Back to menu</button>
+        <button className="btn" onClick={onExit}>Back to menu</button>
       </div>
     );
   }
 
   // Still answering — show the current question only.
   return (
-    <div style={{ maxWidth: 480, margin: "40px auto", fontFamily: "sans-serif" }}>
-      <p>Question {index + 1} of {questions.length}</p>
-      <h3>{current.question}</h3>
+    <div className="card-stack">
+      <p className="counter">Question {index + 1} of {questions.length}</p>
+      <div className="progress-line">
+        <div className="progress-fill" style={{ width: `${((index + 1) / questions.length) * 100}%` }} />
+      </div>
+      <h3 className="question-text">{current.question}</h3>
       {current.options.map((opt) => (
-        <div key={opt.id}>
+        <div key={opt.id} style={{ margin: "6px 0" }}>
           <label>
             <input
               type="radio"
               name="option"
               checked={selected === opt.id}
               onChange={() => setSelected(opt.id)}
-            />
+            />{" "}
             {opt.text}
           </label>
         </div>
       ))}
-      <button onClick={handleNext} disabled={!selected}>
+      <button className="btn" style={{ marginTop: 16 }} onClick={handleNext} disabled={!selected}>
         {isLastQuestion ? "Finish" : "Next"}
       </button>
     </div>
   );
 }
-

@@ -50,47 +50,54 @@ export default function App() {
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: "40px auto", fontFamily: "sans-serif" }}>
-      <h1>Learning Platform</h1>
+    <div className="card-stack">
+      <h1 style={{ fontFamily: "var(--font-serif)", marginTop: 0 }}>Learning Platform</h1>
 
       <div>
-        <button onClick={() => setMode("quiz")} disabled={mode === "quiz"}>Quiz</button>
-        <button onClick={() => setMode("prepare")} disabled={mode === "prepare"}>Prepare</button>
+        <button className="btn" onClick={() => setMode("quiz")} disabled={mode === "quiz"}>Quiz</button>{" "}
+        <button className="btn" onClick={() => setMode("prepare")} disabled={mode === "prepare"}>Prepare</button>
       </div>
 
       {mode && (
-        <div style={{ marginTop: 20 }}>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">Select category</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+        <div style={{ marginTop: 24 }}>
+          <div>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="">Select category</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
 
-          <select value={subcategory} onChange={(e) => setSubcategory(e.target.value)} disabled={!category}>
-            <option value="">Any subcategory</option>
-            {subcategories.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+            <select value={subcategory} onChange={(e) => setSubcategory(e.target.value)} disabled={!category}>
+              <option value="">Any subcategory</option>
+              {subcategories.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
 
-          <select value={topic} onChange={(e) => setTopic(e.target.value)} disabled={!category}>
-            <option value="">Any topic</option>
-            {topics.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+            <select value={topic} onChange={(e) => setTopic(e.target.value)} disabled={!category}>
+              <option value="">Any topic</option>
+              {topics.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
 
-          <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-            <option value="">Any difficulty</option>
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-          </select>
+          <div style={{ marginTop: 8 }}>
+            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+              <option value="">Any difficulty</option>
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
 
-          <input
-            type="number"
-            value={numQuestions}
-            onChange={(e) => setNumQuestions(Number(e.target.value))}
-            min={1}
-            max={50}
-          />
+            <input
+              type="number"
+              value={numQuestions}
+              onChange={(e) => setNumQuestions(Number(e.target.value))}
+              min={1}
+              max={50}
+              style={{ width: 60 }}
+            />
+          </div>
 
-          <button onClick={() => setStarted(true)} disabled={!category}>Start</button>
+          <button className="btn" style={{ marginTop: 16 }} onClick={() => setStarted(true)} disabled={!category}>
+            Start
+          </button>
         </div>
       )}
     </div>
