@@ -2,19 +2,50 @@ import { useState, useEffect } from "react";
 import { getPrepareQuestions, setFavourite, assignTag } from "./api";
 
 export default function PreparePage({ filters, onExit }) {
-  const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions] = useState(null); // null = still loading, [] = loaded but empty
+  const [index, setIndex] = useState(0);
 
   useEffect(() => {
     getPrepareQuestions(filters).then(setQuestions);
   }, []);
 
+  if (questions === null) return <p style={{ color: "var(--card)", textAlign: "center", marginTop: 64 }}>Loading questions...</p>;
+
+  if (questions.length === 0) {
+    return (
+      <div className="card-stack">
+        <p className="question-text">No questions match that combination. Try a different category, subcategory, topic, or difficulty.</p>
+        <button className="btn" onClick={onExit}>Home</button>
+      </div>
+    );
+  }
+
+  const current = questions[index];
+  const isFirst = index === 0;
+  const isLast = index === questions.length - 1;
+
   return (
     <div className="card-stack">
-      <h2 style={{ fontFamily: "var(--font-serif)", marginTop: 0 }}>Prepare</h2>
-      {questions.map((q) => (
-        <QuestionCard key={q.id} question={q} />
-      ))}
-      <button className="btn" onClick={onExit}>Back to menu</button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <button className="btn-secondary" onClick={onExit}>Home</button>
+        <p className="counter" style={{ margin: 0 }}>Question {index + 1} of {questions.length}</p>
+      </div>
+      <div className="progress-line">
+        <div className="progress-fill" style={{ width: `${((index + 1) / questions.length) * 100}%` }} />
+      </div>
+
+      {/* key={current.id} forces QuestionCard to remount per question, so its
+          "revealed"/tag state resets automatically when moving to the next card. */}
+      <QuestionCard key={current.id} question={current} />
+
+      <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
+        <button className="btn-secondary" onClick={() => setIndex(index - 1)} disabled={isFirst}>
+          ← Previous
+        </button>
+        <button className="btn" onClick={() => setIndex(index + 1)} disabled={isLast}>
+          Next →
+        </button>
+      </div>
     </div>
   );
 }
@@ -55,17 +86,17 @@ function QuestionCard({ question }) {
         </>
       )}
 
-      <div style={{ marginTop: 8 }}>
-        <button className="btn-secondary" onClick={handleFavourite}>
+      <div className="card-actions">
+        <button className={`pill-btn ${isFavourite ? "active" : ""}`} onClick={handleFavourite}>
           {isFavourite ? "★ Favourited" : "☆ Favourite"}
-        </button>{" "}
+        </button>
         <input
+          className="pill-input"
           placeholder="Add tag..."
           value={tagInput}
           onChange={(e) => setTagInput(e.target.value)}
-          style={{ width: 120 }}
         />
-        <button className="btn-secondary" onClick={handleAddTag}>Tag</button>
+        <button className="pill-btn" onClick={handleAddTag}>+ Tag</button>
       </div>
     </div>
   );

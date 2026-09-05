@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { getCategories, getSubcategories, getTopics } from "./api";
 import QuizPage from "./QuizPage";
 import PreparePage from "./PreparePage";
+import BrowsePage from "./BrowsePage";
 
 // This component owns the filter selection UI, shared by both modes.
 // Once the user hits "Start", we hand the chosen filters + mode down
@@ -48,6 +49,11 @@ export default function App() {
   if (started && mode === "prepare") {
     return <PreparePage filters={filters} onExit={() => setStarted(false)} />;
   }
+  if (mode === "browse") {
+    // Browse doesn't need category filters — it's driven by favourite/tag,
+    // so it renders immediately instead of going through the filter step.
+    return <BrowsePage onExit={() => setMode(null)} />;
+  }
 
   return (
     <div className="card-stack">
@@ -55,7 +61,8 @@ export default function App() {
 
       <div>
         <button className="btn" onClick={() => setMode("quiz")} disabled={mode === "quiz"}>Quiz</button>{" "}
-        <button className="btn" onClick={() => setMode("prepare")} disabled={mode === "prepare"}>Prepare</button>
+        <button className="btn" onClick={() => setMode("prepare")} disabled={mode === "prepare"}>Prepare</button>{" "}
+        <button className="btn" onClick={() => setMode("browse")}>Browse</button>
       </div>
 
       {mode && (

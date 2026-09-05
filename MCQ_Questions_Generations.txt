@@ -3,7 +3,7 @@
 Edit only this block, then paste the whole thing into any LLM:
 
 ```
-CATEGORY = Date Engineering 
+CATEGORY = Data Engineering 
 SUBCATEGORY = PySpark
 TOPIC = Optimizations
 NUMBER_OF_QUESTIONS = 20

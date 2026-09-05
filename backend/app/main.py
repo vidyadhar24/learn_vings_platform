@@ -17,6 +17,7 @@ from .db_models import Question, QuizAttempt, QuizAttemptAnswer, Tag, QuestionTa
 from .schemas_output import QuizQuestionOut, PrepareQuestionOut
 from .schemas_quiz import QuizSubmitIn, QuizSubmitOut, QuizAnswerReview
 from .schemas_tags import TagOut, TagAssignIn, FavouriteIn
+from .schemas_browse import QuestionSummaryOut
 from .config import DEFAULT_USER_ID
 
 app = FastAPI(title="Learning Platform API")
@@ -214,3 +215,29 @@ def set_favourite(question_id: str, body: FavouriteIn, db: Session = Depends(get
     q.favourite = body.favourite
     db.commit()
     return {"id": q.id, "favourite": q.favourite}
+
+
+@app.get("/tags", response_model=list[TagOut])
+def list_all_tags(db: Session = Depends(get_db)):
+    """Every tag that exists — feeds the dropdown on the browse-by-tag view."""
+    tags = db.execute(select(Tag)).scalars().all()
+    return [TagOut(id=t.id, name=t.name) for t in tags]
+
+
+@app.get("/questions/favourites", response_model=list[QuestionSummaryOut])
+def list_favourites(db: Session = Depends(get_db)):
+    """All questions currently marked favourite, mcq and qna mixed together."""
+    rows = db.execute(select(Question).where(Question.favourite == True)).scalars().all()
+    return [QuestionSummaryOut.from_question(q) for q in rows]
+
+
+@app.get("/questions/by-tag", response_model=list[QuestionSummaryOut])
+def list_by_tag(tag_id: int, db: Session = Depends(get_db)):
+    """All questions carrying a given tag, for DEFAULT_USER_ID."""
+    stmt = (
+        select(Question)
+        .join(QuestionTag, QuestionTag.question_id == Question.id)
+        .where(QuestionTag.tag_id == tag_id, QuestionTag.user_id == DEFAULT_USER_ID)
+    )
+    rows = db.execute(stmt).scalars().all()
+    return [QuestionSummaryOut.from_question(q) for q in rows]

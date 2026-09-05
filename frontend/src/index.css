@@ -100,3 +100,43 @@ select, input[type="number"], input[type="text"] {
   color: var(--ink);
   margin: 4px 8px 4px 0;
 }
+
+/* Right-aligned row of small actions (favourite/tag) at the bottom of a card. */
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pill-btn {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  background: #EFEAD9;
+  color: var(--ink);
+  border: 1px solid #d8d3c2;
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.pill-btn:hover {
+  background: #e4dfc8;
+}
+
+.pill-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.pill-input {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  border: 1px solid #d8d3c2;
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: var(--card);
+  width: 110px;
+}

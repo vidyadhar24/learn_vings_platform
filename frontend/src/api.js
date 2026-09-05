@@ -56,3 +56,15 @@ export function setFavourite(questionId, favourite) {
     body: JSON.stringify({ favourite }),
   });
 }
+
+export function getFavourites() {
+  return request("/questions/favourites");
+}
+
+export function getAllTags() {
+  return request("/tags");
+}
+
+export function getQuestionsByTag(tagId) {
+  return request(`/questions/by-tag?tag_id=${tagId}`);
+}
