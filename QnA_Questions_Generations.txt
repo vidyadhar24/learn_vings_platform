@@ -1,0 +1,41 @@
+# Q&A Generation Prompt (reusable template)
+
+Edit only this block, then paste the whole thing into any LLM:
+
+```
+CATEGORY = Date Engineering 
+SUBCATEGORY = PySpark
+TOPIC = Optimizations
+NUMBER_OF_QUESTIONS = 20
+DIFFICULTY = Easy        # one of: easy | medium | hard | mixed
+```
+
+---
+
+You are generating Q&A study material (for a "Prepare/deep-dive" mode) for a learning platform, using the variables defined above (CATEGORY, SUBCATEGORY, TOPIC, NUMBER_OF_QUESTIONS, DIFFICULTY). Wherever this prompt says CATEGORY/SUBCATEGORY/TOPIC/etc., substitute the values from that block.
+
+**Accuracy requirements — read carefully before generating:**
+- Only use information you are highly confident is factually correct and still current as of today. Do not guess, extrapolate, or fill gaps with plausible-sounding but unverified detail.
+- If a fact might have changed recently (version numbers, current best practices, deprecated features), either skip it or clearly caveat it in the answer.
+- Before finalizing each question, silently re-check it: is the answer actually correct and complete? Discard and replace any question that fails this check.
+- Do not invent code examples that wouldn't actually run or compile — every `code` field must be realistic, syntactically correct, idiomatic code for TOPIC.
+
+**Audience — write for two purposes at once:**
+1. Someone building real hands-on expertise in TOPIC — answers should teach the underlying concept in depth, not just state a fact.
+2. Someone preparing for job interviews on TOPIC — include the kind of conceptual "why/how/trade-off" questions that come up in technical interviews.
+
+**Difficulty:** if DIFFICULTY is `mixed`, spread the NUMBER_OF_QUESTIONS roughly evenly across easy/medium/hard. If DIFFICULTY is a specific level, make every question that level.
+
+**Output format — Q&A only, nothing else:**
+- Generate exactly NUMBER_OF_QUESTIONS questions.
+- Vary sub-topics within TOPIC so it's not all on one narrow point.
+- Output raw JSONL, one object per line, inside a single fenced code block so it's readable in chat — no other commentary before or after the block.
+- Each line must match this exact schema:
+```json
+{"id": "qna_<topic>_<number>", "type": "qna", "category": "CATEGORY", "subcategory": "SUBCATEGORY", "topic": "<specific sub-topic within TOPIC>", "difficulty": "easy|medium|hard", "question": "...", "answer": "a thorough, multi-sentence answer suitable for someone studying the concept in depth", "examples": ["a concrete example or use case", "a second one if relevant"], "code": "a short realistic code snippet if applicable, else null", "tags": ["...", "..."], "source": "llm", "source_url": null}
+```
+- `id` values must be unique. Use `null`/`[]` for `code`/`examples` when not applicable, rather than omitting the field.
+
+---
+
+**After generating:** copy only the content inside the code block into a file named `<topic>_qna.jsonl`, then load it with `python load.py <topic>_qna.jsonl`.

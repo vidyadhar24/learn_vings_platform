@@ -1,111 +1,102 @@
+/* Design tokens for the whole app. Import Lora (question/answer text)
+   and Inter (UI chrome) — two clearly distinct type roles rather than
+   one default system font everywhere. */
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;600&family=Inter:wght@400;600&display=swap');
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  --board: #2B2E27;      /* page background — deep olive, not flat black */
+  --card: #FBF8F1;       /* the "paper" surface every question sits on */
+  --ink: #23241F;        /* primary text on the card */
+  --ink-muted: #6B6A5E;  /* secondary text — labels, hints, counters */
+  --accent: #C9A227;     /* the one highlight color — buttons, progress, correct */
+  --wrong: #A23E30;      /* incorrect answers only — never decorative */
+  --font-serif: 'Lora', serif;
+  --font-sans: 'Inter', sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
+  background: var(--board);
+  color: var(--ink);
+  font-family: var(--font-sans);
 }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+/* The stacked-card look: two offset rectangles behind the real card,
+   done with layered box-shadows instead of extra DOM elements — this
+   is the one deliberately bold visual choice, so nothing else competes. */
+.card-stack {
+  position: relative;
+  max-width: 560px;
+  margin: 64px auto;
+  background: var(--card);
+  padding: 32px 36px;
+  text-align: left;
+  box-shadow:
+    8px 8px 0 -4px var(--board),
+    8px 8px 0 -3px rgba(251, 248, 241, 0.6),
+    14px 14px 0 -8px var(--board),
+    14px 14px 0 -7px rgba(251, 248, 241, 0.35);
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+.question-text {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  line-height: 1.5;
+  max-width: 68ch; /* keep line length readable even on wide screens */
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
+.btn {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--ink);
+  border: none;
+  padding: 10px 20px;
+  cursor: pointer;
 }
 
-code,
+.btn:disabled {
+  background: #d8d3c2;
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--ink);
+  text-decoration: underline;
+  padding: 10px 4px;
+}
+
 .counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+  font-family: var(--font-sans);
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  margin-bottom: 4px;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+.progress-line {
+  height: 3px;
+  background: #e4dfd0;
+  margin-bottom: 20px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease; /* the only motion in the app — answers a real state change */
+}
+
+.correct { color: #5c6b2f; }   /* olive-green, not a generic bright green */
+.incorrect { color: var(--wrong); }
+
+select, input[type="number"], input[type="text"] {
+  font-family: var(--font-sans);
+  padding: 8px;
+  border: 1px solid var(--ink-muted);
+  background: var(--card);
+  color: var(--ink);
+  margin: 4px 8px 4px 0;
 }

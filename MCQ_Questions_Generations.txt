@@ -1,0 +1,40 @@
+# MCQ Generation Prompt (reusable template)
+
+Edit only this block, then paste the whole thing into any LLM:
+
+```
+CATEGORY = Date Engineering 
+SUBCATEGORY = PySpark
+TOPIC = Optimizations
+NUMBER_OF_QUESTIONS = 20
+DIFFICULTY = Easy        # one of: easy | medium | hard | mixed
+```
+
+---
+
+You are generating MCQ study material for a learning platform, using the variables defined above (CATEGORY, SUBCATEGORY, TOPIC, NUMBER_OF_QUESTIONS, DIFFICULTY). Wherever this prompt says CATEGORY/SUBCATEGORY/TOPIC/etc., substitute the values from that block.
+
+**Accuracy requirements — read carefully before generating:**
+- Only use information you are highly confident is factually correct and still current as of today. Do not guess, extrapolate, or fill gaps with plausible-sounding but unverified detail.
+- If a fact might have changed recently (version numbers, current best practices, deprecated features), either skip it or clearly caveat it in the explanation.
+- Before finalizing each question, silently re-check it: is it unambiguous, is there exactly one correct answer, and is the explanation actually correct? Discard and replace any question that fails this check.
+
+**Audience — write for two purposes at once:**
+1. Someone building real hands-on expertise in TOPIC — options and explanations should test genuine understanding, not trivia.
+2. Someone preparing for job interviews on TOPIC — include the kind of conceptual "why/how/trade-off" questions that come up in technical interviews.
+
+**Difficulty:** if DIFFICULTY is `mixed`, spread the NUMBER_OF_QUESTIONS roughly evenly across easy/medium/hard. If DIFFICULTY is a specific level, make every question that level.
+
+**Output format — MCQs only, nothing else:**
+- Generate exactly NUMBER_OF_QUESTIONS questions.
+- Vary sub-topics within TOPIC so it's not all on one narrow point.
+- Output raw JSONL, one object per line, inside a single fenced code block so it's readable in chat — no other commentary before or after the block.
+- Each line must match this exact schema:
+```json
+{"id": "mcq_<topic>_<number>", "type": "mcq", "category": "CATEGORY", "subcategory": "SUBCATEGORY", "topic": "<specific sub-topic within TOPIC>", "difficulty": "easy|medium|hard", "question": "...", "options": [{"id": "a", "text": "..."}, {"id": "b", "text": "..."}, {"id": "c", "text": "..."}, {"id": "d", "text": "..."}], "correct_option": "a", "explanation": "why this is correct, and briefly why the others are wrong", "tags": ["...", "..."], "source": "llm", "source_url": null}
+```
+- `id` values must be unique.
+
+---
+
+**After generating:** copy only the content inside the code block into a file named `<topic>_mcq.jsonl`, then load it with `python load.py <topic>_mcq.jsonl`.
