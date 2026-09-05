@@ -12,7 +12,10 @@ from sqlalchemy import select, distinct, func
 
 from .database import get_db
 from .db_models import Question
-from .schemas_output import QuizQuestionOut
+from .schemas_output import QuizQuestionOut, PrepareQuestionOut
+from .schemas_quiz import QuizSubmitIn, QuizSubmitOut, QuizAnswerReview
+from .db_models import QuizAttempt, QuizAttemptAnswer
+from .config import DEFAULT_USER_ID
 
 app = FastAPI(title="Learning Platform API")
 
@@ -67,3 +70,72 @@ def get_quiz_questions(
 
     rows = db.execute(stmt).scalars().all()
     return [QuizQuestionOut.from_question(q) for q in rows]
+
+
+@app.get("/questions/prepare", response_model=list[PrepareQuestionOut])
+def get_prepare_questions(
+    category: str,
+    subcategory: Optional[str] = None,
+    topic: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+):
+    """Same filter logic as the quiz endpoint, but for qna rows, and the
+    full payload (answer/examples/code) is returned — Prepare mode is
+    meant to show it, just collapsed behind a toggle in the UI."""
+    stmt = select(Question).where(Question.type == "qna", Question.category == category)
+    if subcategory:
+        stmt = stmt.where(Question.subcategory == subcategory)
+    if topic:
+        stmt = stmt.where(Question.topic == topic)
+    if difficulty:
+        stmt = stmt.where(Question.difficulty == difficulty)
+    stmt = stmt.limit(limit)
+
+    rows = db.execute(stmt).scalars().all()
+    return [PrepareQuestionOut.from_question(q) for q in rows]
+
+
+@app.post("/quiz/submit", response_model=QuizSubmitOut)
+def submit_quiz(submission: QuizSubmitIn, db: Session = Depends(get_db)):
+    """Grades the submission server-side (client never had correct_option),
+    saves the attempt for history, and returns the score + a review list
+    with correct answers now revealed."""
+    ids = [a.question_id for a in submission.answers]
+    questions = db.execute(select(Question).where(Question.id.in_(ids))).scalars().all()
+    questions_by_id = {q.id: q for q in questions}
+
+    review = []
+    score = 0
+    for ans in submission.answers:
+        q = questions_by_id[ans.question_id]
+        correct_option = q.payload["correct_option"]
+        is_correct = ans.selected_option == correct_option
+        score += int(is_correct)
+        review.append(QuizAnswerReview(
+            question_id=q.id, question=q.question,
+            selected_option=ans.selected_option, correct_option=correct_option,
+            is_correct=is_correct, explanation=q.payload.get("explanation"),
+        ))
+
+    # Persist the attempt so there's a scoring history (user_id hardcoded
+    # until real accounts exist — see blueprint's multi-account note).
+    attempt = QuizAttempt(
+        user_id=DEFAULT_USER_ID,
+        filters={"category": submission.category, "subcategory": submission.subcategory,
+                 "topic": submission.topic, "difficulty": submission.difficulty},
+        total_questions=len(submission.answers),
+        score=score,
+    )
+    db.add(attempt)
+    db.flush()  # assigns attempt.id without committing yet
+
+    for r in review:
+        db.add(QuizAttemptAnswer(
+            attempt_id=attempt.id, question_id=r.question_id,
+            selected_option=r.selected_option, is_correct=r.is_correct,
+        ))
+    db.commit()
+
+    return QuizSubmitOut(attempt_id=attempt.id, score=score, total=len(submission.answers), review=review)
