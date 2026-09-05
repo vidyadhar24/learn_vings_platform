@@ -7,6 +7,7 @@ whole stack works before building the more complex quiz/prepare endpoints.
 """
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import select, distinct, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -19,6 +20,16 @@ from .schemas_tags import TagOut, TagAssignIn, FavouriteIn
 from .config import DEFAULT_USER_ID
 
 app = FastAPI(title="Learning Platform API")
+
+# Without this, a browser blocks requests from the React dev server (a
+# different origin/port) to this API — CORS is a browser-side security
+# rule, not something Python enforces on its own.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Vite's default dev port
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/categories")
