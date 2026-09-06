@@ -38,7 +38,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",              # local dev (Vite)
-        "https://your-site-name.onrender.com", # replace with your actual Render Static Site URL
+        "https://vings-learning-platform.onrender.com", # replace with your actual Render Static Site URL
     ],
     allow_methods=["*"],
     allow_headers=["*"],
