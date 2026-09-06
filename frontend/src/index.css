@@ -1,15 +1,15 @@
 /* Design tokens for the whole app. Import Lora (question/answer text)
-   and Inter (UI chrome) — two clearly distinct type roles rather than
+   and Inter (UI chrome) â€” two clearly distinct type roles rather than
    one default system font everywhere. */
 @import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;600&family=Inter:wght@400;600&display=swap');
 
 :root {
-  --board: #2B2E27;      /* page background — deep olive, not flat black */
+  --board: #2B2E27;      /* page background â€” deep olive, not flat black */
   --card: #FBF8F1;       /* the "paper" surface every question sits on */
   --ink: #23241F;        /* primary text on the card */
-  --ink-muted: #6B6A5E;  /* secondary text — labels, hints, counters */
-  --accent: #C9A227;     /* the one highlight color — buttons, progress, correct */
-  --wrong: #A23E30;      /* incorrect answers only — never decorative */
+  --ink-muted: #6B6A5E;  /* secondary text â€” labels, hints, counters */
+  --accent: #C9A227;     /* the one highlight color â€” buttons, progress, correct */
+  --wrong: #A23E30;      /* incorrect answers only â€” never decorative */
   --font-serif: 'Lora', serif;
   --font-sans: 'Inter', sans-serif;
 }
@@ -24,7 +24,7 @@ body {
 }
 
 /* The stacked-card look: two offset rectangles behind the real card,
-   done with layered box-shadows instead of extra DOM elements — this
+   done with layered box-shadows instead of extra DOM elements â€” this
    is the one deliberately bold visual choice, so nothing else competes. */
 .card-stack {
   position: relative;
@@ -86,19 +86,47 @@ body {
 .progress-fill {
   height: 100%;
   background: var(--accent);
-  transition: width 0.3s ease; /* the only motion in the app — answers a real state change */
+  transition: width 0.3s ease; /* the only motion in the app â€” answers a real state change */
 }
 
 .correct { color: #5c6b2f; }   /* olive-green, not a generic bright green */
 .incorrect { color: var(--wrong); }
 
-select, input[type="number"], input[type="text"] {
+select, input[type="number"], input[type="text"], textarea {
   font-family: var(--font-sans);
-  padding: 8px;
-  border: 1px solid var(--ink-muted);
+  padding: 10px 12px;
+  border: 1px solid #d8d3c2;
+  border-radius: 4px;
   background: var(--card);
   color: var(--ink);
   margin: 4px 8px 4px 0;
+}
+
+select:focus, input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Vertical form layout â€” a labeled row per field, instead of inputs
+   crammed edge-to-edge with no breathing room. */
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.field-label {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.field-row {
+  display: flex;
+  gap: 12px;
 }
 
 /* Right-aligned row of small actions (favourite/tag) at the bottom of a card. */

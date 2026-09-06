@@ -6,6 +6,8 @@ round trip (HTTP -> DB session -> query -> response) so we can confirm the
 whole stack works before building the more complex quiz/prepare endpoints.
 """
 import json
+import re
+import uuid
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +22,9 @@ from .schemas_quiz import QuizSubmitIn, QuizSubmitOut, QuizAnswerReview
 from .schemas_tags import TagOut, TagAssignIn, FavouriteIn
 from .schemas_browse import QuestionSummaryOut
 from .schemas_input import MCQInput, QnAInput
+from .schemas_generate import GenerateRequest, GenerateResponse, GeneratedQuestionOut, CommitRequest
+from .prompt_builder import build_prompt
+from .llm_client import generate_text
 from .config import DEFAULT_USER_ID
 
 MODEL_BY_TYPE = {"mcq": MCQInput, "qna": QnAInput}
@@ -33,7 +38,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",              # local dev (Vite)
-        "https://vings-learning-platform.onrender.com", # replace with your actual Render Static Site URL
+        "https://your-site-name.onrender.com", # replace with your actual Render Static Site URL
     ],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -320,3 +325,67 @@ async def admin_load_jsonl(file: UploadFile = File(...), db: Session = Depends(g
 
     db.commit()
     return {"loaded": loaded, "failed": len(errors), "errors": errors}
+
+
+def _extract_jsonl(raw_text: str) -> list[str]:
+    """Pulls JSONL lines out of the LLM's response. Handles the case where
+    it's wrapped in a ```...``` fence (asked for in the prompt) as well as
+    the case where the model ignores that and just returns raw lines."""
+    fence_match = re.search(r"```[a-zA-Z]*\s*(.*?)```", raw_text, re.DOTALL)
+    text = fence_match.group(1) if fence_match else raw_text
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+@app.post("/admin/generate", response_model=GenerateResponse)
+def generate_questions(req: GenerateRequest):
+    """Calls the LLM, validates its output, and returns a PREVIEW only —
+    nothing is written to the database here. That happens in /admin/commit,
+    only once the user has looked at what came back."""
+    prompt = build_prompt(req)
+    raw_response = generate_text(prompt)
+    lines = _extract_jsonl(raw_response)
+
+    items, errors = [], []
+    for line_no, line in enumerate(lines, start=1):
+        try:
+            raw = json.loads(line)
+            model_cls = MODEL_BY_TYPE[req.question_type]
+            # The LLM's own "id" is discarded — we mint one ourselves so two
+            # generate runs can never collide with (or silently overwrite) each other.
+            raw["id"] = f"{req.question_type}_{uuid.uuid4().hex[:10]}"
+            parsed = model_cls(**raw)
+            items.append(GeneratedQuestionOut(
+                id=parsed.id, type=parsed.type, category=parsed.category,
+                subcategory=parsed.subcategory,
+                # Only pinned to the form value when the user actually gave one —
+                # leaving it blank means "let it vary," so we trust the LLM's
+                # per-question topic in that case instead of forcing null.
+                topic=(req.topic if req.topic else parsed.topic),
+                difficulty=parsed.difficulty, question=parsed.question,
+                payload=parsed.to_payload(),
+            ))
+        except Exception as e:
+            errors.append({"line": line_no, "error": str(e)})
+
+    return GenerateResponse(items=items, errors=errors)
+
+
+@app.post("/admin/commit")
+def commit_generated(body: CommitRequest, db: Session = Depends(get_db)):
+    """Inserts exactly the previewed items the user approved. No re-validation
+    against the LLM needed here — these already passed schema validation in
+    /admin/generate; we're just persisting what's already been reviewed."""
+    for item in body.items:
+        stmt = pg_insert(Question).values(
+            id=item.id, type=item.type, category=item.category,
+            subcategory=item.subcategory, topic=item.topic,
+            difficulty=item.difficulty, question=item.question,
+            payload=item.payload, source="llm", source_url=None,
+            favourite=False, duplicate=False,
+        )
+        # No on_conflict clause needed — ids are freshly minted uuids in
+        # /admin/generate, so a collision here would be a genuine bug, not
+        # an expected re-run scenario (unlike the file loader).
+        db.execute(stmt)
+    db.commit()
+    return {"inserted": len(body.items)}
