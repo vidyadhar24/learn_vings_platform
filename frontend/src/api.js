@@ -70,6 +70,13 @@ export function commitGenerated(items) {
   return request("/admin/commit", { method: "POST", body: JSON.stringify({ items }) });
 }
 
+export function explainQuestion(questionId, customInstruction) {
+  return request(`/questions/${questionId}/explain`, {
+    method: "POST",
+    body: JSON.stringify({ custom_instruction: customInstruction || null }),
+  });
+}
+
 export function setFavourite(questionId, favourite) {
   return request(`/questions/${questionId}/favourite`, {
     method: "PATCH",

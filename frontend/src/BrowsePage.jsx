@@ -1,17 +1,7 @@
 import { useState, useEffect } from "react";
 import { getFavourites, getAllTags, getQuestionsByTag, setFavourite, assignTag } from "./api";
-
-// Same reasoning as PreparePage.jsx: answers are written one point per line,
-// but HTML collapses raw "\n" in a <p>, so this splits and renders <li>s.
-function AnswerText({ answer }) {
-  const lines = answer.split("\n").map((l) => l.replace(/^-\s*/, "").trim()).filter(Boolean);
-  if (lines.length <= 1) return <p className="question-text">{answer}</p>;
-  return (
-    <ul className="question-text" style={{ paddingLeft: 20 }}>
-      {lines.map((line, i) => <li key={i}>{line}</li>)}
-    </ul>
-  );
-}
+import MarkdownText from "./MarkdownText";
+import ExplainWithLLM from "./ExplainWithLLM";
 
 // Two tabs sharing one layout: "Favourites" needs no extra input, "By tag"
 // needs a tag picked first. Both end up rendering the same BrowseItem list.
@@ -104,12 +94,14 @@ function BrowseItem({ question }) {
         </ul>
       ) : (
         <>
-          <AnswerText answer={question.payload.answer} />
+          <MarkdownText>{question.payload.answer}</MarkdownText>
           {question.payload.code && (
             <pre style={{ background: "#EFEAD9", padding: 12, overflowX: "auto" }}>{question.payload.code}</pre>
           )}
         </>
       )}
+
+      {revealed && <ExplainWithLLM questionId={question.id} />}
 
       <div className="card-actions">
         <button className={`pill-btn ${isFavourite ? "active" : ""}`} onClick={handleFavourite}>

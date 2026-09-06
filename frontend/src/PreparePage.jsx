@@ -1,19 +1,7 @@
 import { useState, useEffect } from "react";
 import { getPrepareQuestions, setFavourite, assignTag } from "./api";
-
-// Answers are written with one point per line (see prompt-qna.md). Splitting
-// on "\n" and rendering as <li> is what actually turns that into a visible
-// bullet list — HTML collapses raw newlines in a <p>, so this step is required
-// even though the source text is already formatted with "- " per line.
-function AnswerText({ answer }) {
-  const lines = answer.split("\n").map((l) => l.replace(/^-\s*/, "").trim()).filter(Boolean);
-  if (lines.length <= 1) return <p className="question-text">{answer}</p>;
-  return (
-    <ul className="question-text" style={{ paddingLeft: 20 }}>
-      {lines.map((line, i) => <li key={i}>{line}</li>)}
-    </ul>
-  );
-}
+import MarkdownText from "./MarkdownText";
+import ExplainWithLLM from "./ExplainWithLLM";
 
 export default function PreparePage({ filters, onExit }) {
   const [questions, setQuestions] = useState(null); // null = still loading, [] = loaded but empty
@@ -90,7 +78,7 @@ function QuestionCard({ question }) {
         <button className="pill-btn" onClick={() => setRevealed(true)}>Show answer</button>
       ) : (
         <>
-          <AnswerText answer={question.answer} />
+          <MarkdownText>{question.answer}</MarkdownText>
           {question.examples.length > 0 && (
             <ul style={{ color: "var(--ink-muted)" }}>{question.examples.map((ex, i) => <li key={i}>{ex}</li>)}</ul>
           )}
@@ -99,6 +87,8 @@ function QuestionCard({ question }) {
           )}
         </>
       )}
+
+      {revealed && <ExplainWithLLM questionId={question.id} />}
 
       <div className="card-actions">
         <button className={`pill-btn ${isFavourite ? "active" : ""}`} onClick={handleFavourite}>

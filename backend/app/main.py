@@ -23,6 +23,7 @@ from .schemas_tags import TagOut, TagAssignIn, FavouriteIn
 from .schemas_browse import QuestionSummaryOut
 from .schemas_input import MCQInput, QnAInput
 from .schemas_generate import GenerateRequest, GenerateResponse, GeneratedQuestionOut, CommitRequest
+from .schemas_explain import ExplainRequest, ExplainResponse
 from .prompt_builder import build_prompt
 from .llm_client import generate_text
 from .config import DEFAULT_USER_ID
@@ -38,7 +39,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",              # local dev (Vite)
-        "https://vings-learning-platform.onrender.com", # replace with your actual Render Static Site URL
+        "https://vings-learning-platform.onrender.comm", # replace with your actual Render Static Site URL
     ],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -389,3 +390,32 @@ def commit_generated(body: CommitRequest, db: Session = Depends(get_db)):
         db.execute(stmt)
     db.commit()
     return {"inserted": len(body.items)}
+
+
+@app.post("/questions/{question_id}/explain", response_model=ExplainResponse)
+def explain_question(question_id: str, body: ExplainRequest, db: Session = Depends(get_db)):
+    """Generates a deeper explanation on demand. The question/answer is
+    looked up from the DB by id (never trusted from the request body) so
+    a tampered frontend request can't make this explain something else."""
+    q = _get_question_or_404(db, question_id)
+
+    if q.type == "mcq":
+        options_text = "\n".join(f"- {opt['text']}" for opt in q.payload["options"])
+        context = (
+            f"Question: {q.question}\nOptions:\n{options_text}\n"
+            f"Correct answer: {next(o['text'] for o in q.payload['options'] if o['id'] == q.payload['correct_option'])}\n"
+            f"Existing brief explanation: {q.payload.get('explanation') or 'none'}"
+        )
+    else:
+        context = f"Question: {q.question}\nAnswer: {q.payload['answer']}"
+
+    custom_line = f"\nThe user specifically asked for: {body.custom_instruction}" if body.custom_instruction else ""
+
+    prompt = f"""\
+You are a tutor helping someone deeply understand a study question they've already seen.
+{context}
+{custom_line}
+Give a clear, thorough explanation of the underlying concept — not just why the stated answer is correct, but the reasoning and context behind it. If the user asked for examples or code, include them concretely. Keep it focused and skip generic preamble like "Great question!"."""
+
+    explanation = generate_text(prompt)
+    return ExplainResponse(explanation=explanation)
