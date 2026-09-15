@@ -24,7 +24,7 @@ from .schemas_browse import QuestionSummaryOut
 from .schemas_input import MCQInput, QnAInput
 from .schemas_generate import GenerateRequest, GenerateResponse, GeneratedQuestionOut, CommitRequest
 from .schemas_explain import ExplainRequest, ExplainResponse
-from .schemas_stats import SessionSummaryOut, CategoryStatsOut
+from .schemas_stats import SessionSummaryOut, CategoryStatsOut, ContentCountOut
 from .prompt_builder import build_prompt
 from .llm_client import generate_text
 from .config import DEFAULT_USER_ID
@@ -470,4 +470,24 @@ def stats_overview(db: Session = Depends(get_db)):
             average_percentage=round((s["total_correct"] / s["total_questions"]) * 100, 1) if s["total_questions"] else 0.0,
         )
         for cat, s in by_category.items()
+    ]
+
+
+@app.get("/admin/content-overview", response_model=list[ContentCountOut])
+def content_overview(db: Session = Depends(get_db)):
+    """How many questions exist, broken down by category/subcategory/topic/type.
+    A real GROUP BY (unlike stats_overview above) since this counts rows in
+    the questions table directly rather than aggregating in-memory objects."""
+    stmt = (
+        select(
+            Question.category, Question.subcategory, Question.topic, Question.type,
+            func.count(Question.id).label("count"),
+        )
+        .group_by(Question.category, Question.subcategory, Question.topic, Question.type)
+        .order_by(Question.category, Question.subcategory, Question.topic)
+    )
+    rows = db.execute(stmt).all()
+    return [
+        ContentCountOut(category=r.category, subcategory=r.subcategory, topic=r.topic, type=r.type, count=r.count)
+        for r in rows
     ]

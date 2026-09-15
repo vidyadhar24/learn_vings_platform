@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { uploadJsonl, generateQuestions, commitGenerated } from "./api";
+import { useState, useEffect } from "react";
+import { uploadJsonl, generateQuestions, commitGenerated, getContentOverview } from "./api";
 
 export default function AdminUploadPage({ onExit }) {
-  const [tab, setTab] = useState("file"); // "file" | "generate"
+  const [tab, setTab] = useState("file"); // "file" | "generate" | "content"
 
   return (
     <div className="card-stack">
@@ -17,10 +17,15 @@ export default function AdminUploadPage({ onExit }) {
         </button>{" "}
         <button className={`pill-btn ${tab === "generate" ? "active" : ""}`} onClick={() => setTab("generate")}>
           Generate with LLM
+        </button>{" "}
+        <button className={`pill-btn ${tab === "content" ? "active" : ""}`} onClick={() => setTab("content")}>
+          Content Overview
         </button>
       </div>
 
-      {tab === "file" ? <FileUploadTab /> : <GenerateTab />}
+      {tab === "file" && <FileUploadTab />}
+      {tab === "generate" && <GenerateTab />}
+      {tab === "content" && <ContentOverviewTab />}
     </div>
   );
 }
@@ -205,6 +210,104 @@ function GenerateTab() {
       )}
 
       <UploadResult result={commitResult} />
+    </div>
+  );
+}
+
+// Rolls the flat category/subcategory/topic/type/count list into a nested
+// tree, client-side — no backend change needed since /admin/content-overview
+// already returns full granularity. Nothing below category level renders
+// until the user actually expands it, so this stays readable at any scale.
+function buildTree(rows) {
+  const tree = {};
+  for (const row of rows) {
+    const cat = row.category;
+    const sub = row.subcategory || "(no subcategory)";
+    const topic = row.topic || "(no topic)";
+
+    tree[cat] ??= { total: 0, mcq: 0, qna: 0, subcategories: {} };
+    tree[cat].total += row.count;
+    tree[cat][row.type] += row.count;
+
+    tree[cat].subcategories[sub] ??= { total: 0, mcq: 0, qna: 0, topics: {} };
+    tree[cat].subcategories[sub].total += row.count;
+    tree[cat].subcategories[sub][row.type] += row.count;
+
+    tree[cat].subcategories[sub].topics[topic] ??= { mcq: 0, qna: 0, total: 0 };
+    tree[cat].subcategories[sub].topics[topic][row.type] += row.count;
+    tree[cat].subcategories[sub].topics[topic].total += row.count;
+  }
+  return tree;
+}
+
+function ContentOverviewTab() {
+  const [rows, setRows] = useState(null);
+  const [expandedCategories, setExpandedCategories] = useState(new Set());
+  const [expandedSubcats, setExpandedSubcats] = useState(new Set());
+
+  useEffect(() => {
+    getContentOverview().then(setRows);
+  }, []);
+
+  if (rows === null) return <p style={{ marginTop: 16 }}>Loading...</p>;
+
+  const tree = buildTree(rows);
+
+  function toggleCategory(cat) {
+    const next = new Set(expandedCategories);
+    next.has(cat) ? next.delete(cat) : next.add(cat);
+    setExpandedCategories(next);
+  }
+
+  function toggleSubcat(key) {
+    const next = new Set(expandedSubcats);
+    next.has(key) ? next.delete(key) : next.add(key);
+    setExpandedSubcats(next);
+  }
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      {Object.entries(tree).map(([cat, catData]) => (
+        <div key={cat} style={{ marginBottom: 8 }}>
+          <div
+            onClick={() => toggleCategory(cat)}
+            style={{ display: "flex", justifyContent: "space-between", padding: 10, background: "#EFEAD9", borderRadius: 4, cursor: "pointer" }}
+          >
+            <span>{expandedCategories.has(cat) ? "▾" : "▸"} <strong>{cat}</strong></span>
+            <span style={{ color: "var(--ink-muted)" }}><strong>{catData.mcq}</strong> mcq, <strong>{catData.qna}</strong> qna</span>
+          </div>
+
+          {expandedCategories.has(cat) && (
+            <div style={{ paddingLeft: 20, marginTop: 4 }}>
+              {Object.entries(catData.subcategories).map(([sub, subData]) => {
+                const subKey = `${cat}::${sub}`;
+                return (
+                  <div key={subKey} style={{ marginBottom: 4 }}>
+                    <div
+                      onClick={() => toggleSubcat(subKey)}
+                      style={{ display: "flex", justifyContent: "space-between", padding: "6px 10px", cursor: "pointer" }}
+                    >
+                      <span>{expandedSubcats.has(subKey) ? "▾" : "▸"} {sub}</span>
+                      <span style={{ color: "var(--ink-muted)" }}><strong>{subData.mcq}</strong> mcq, <strong>{subData.qna}</strong> qna</span>
+                    </div>
+
+                    {expandedSubcats.has(subKey) && (
+                      <div style={{ paddingLeft: 20 }}>
+                        {Object.entries(subData.topics).map(([topic, counts]) => (
+                          <div key={topic} style={{ display: "flex", justifyContent: "space-between", padding: "4px 10px", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+                            <span>{topic}</span>
+                            <span><strong>{counts.mcq}</strong> mcq, <strong>{counts.qna}</strong> qna</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

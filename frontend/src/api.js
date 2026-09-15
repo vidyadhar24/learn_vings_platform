@@ -85,6 +85,10 @@ export function getStatsOverview() {
   return request("/stats/overview");
 }
 
+export function getContentOverview() {
+  return request("/admin/content-overview");
+}
+
 export function setFavourite(questionId, favourite) {
   return request(`/questions/${questionId}/favourite`, {
     method: "PATCH",

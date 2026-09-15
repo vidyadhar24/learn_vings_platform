@@ -25,3 +25,13 @@ class CategoryStatsOut(BaseModel):
     total_questions: int
     total_correct: int
     average_percentage: float
+
+
+class ContentCountOut(BaseModel):
+    """One row of the admin content-overview breakdown — how many
+    questions exist for a given category/subcategory/topic/type combo."""
+    category: str
+    subcategory: Optional[str]
+    topic: Optional[str]
+    type: str
+    count: int
