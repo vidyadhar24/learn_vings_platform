@@ -24,6 +24,7 @@ from .schemas_browse import QuestionSummaryOut
 from .schemas_input import MCQInput, QnAInput
 from .schemas_generate import GenerateRequest, GenerateResponse, GeneratedQuestionOut, CommitRequest
 from .schemas_explain import ExplainRequest, ExplainResponse
+from .schemas_stats import SessionSummaryOut, CategoryStatsOut
 from .prompt_builder import build_prompt
 from .llm_client import generate_text
 from .config import DEFAULT_USER_ID
@@ -39,7 +40,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",              # local dev (Vite)
-        "https://vings-learning-platform.onrender.com", # replace with your actual Render Static Site URL
+        "https://your-site-name.onrender.com", # replace with your actual Render Static Site URL
     ],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -419,3 +420,54 @@ Give a clear, thorough explanation of the underlying concept — not just why th
 
     explanation = generate_text(prompt)
     return ExplainResponse(explanation=explanation)
+
+
+@app.get("/stats/sessions", response_model=list[SessionSummaryOut])
+def list_sessions(db: Session = Depends(get_db)):
+    """Every past quiz attempt for DEFAULT_USER_ID, most recent first. The
+    data itself has existed since Phase 2 (quiz_attempts) — this is the
+    first thing that actually reads it back."""
+    attempts = db.execute(
+        select(QuizAttempt)
+        .where(QuizAttempt.user_id == DEFAULT_USER_ID)
+        .order_by(QuizAttempt.started_at.desc())
+    ).scalars().all()
+
+    return [
+        SessionSummaryOut(
+            attempt_id=a.id, started_at=a.started_at,
+            category=a.filters.get("category"), subcategory=a.filters.get("subcategory"),
+            topic=a.filters.get("topic"), difficulty=a.filters.get("difficulty"),
+            total_questions=a.total_questions, score=a.score,
+            percentage=round((a.score / a.total_questions) * 100, 1) if a.total_questions else 0.0,
+        )
+        for a in attempts
+    ]
+
+
+@app.get("/stats/overview", response_model=list[CategoryStatsOut])
+def stats_overview(db: Session = Depends(get_db)):
+    """Rolls every attempt up by category — 'you've done Spark 5 times,
+    averaging 72%'. Aggregated in Python rather than SQL since attempt
+    counts are small for a personal project; revisit with a GROUP BY
+    query if this ever needs to scale to many users/attempts."""
+    attempts = db.execute(
+        select(QuizAttempt).where(QuizAttempt.user_id == DEFAULT_USER_ID)
+    ).scalars().all()
+
+    by_category = {}
+    for a in attempts:
+        cat = a.filters.get("category") or "Uncategorized"
+        stats = by_category.setdefault(cat, {"attempts": 0, "total_questions": 0, "total_correct": 0})
+        stats["attempts"] += 1
+        stats["total_questions"] += a.total_questions
+        stats["total_correct"] += a.score
+
+    return [
+        CategoryStatsOut(
+            category=cat, attempts=s["attempts"], total_questions=s["total_questions"],
+            total_correct=s["total_correct"],
+            average_percentage=round((s["total_correct"] / s["total_questions"]) * 100, 1) if s["total_questions"] else 0.0,
+        )
+        for cat, s in by_category.items()
+    ]

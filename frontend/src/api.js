@@ -2,7 +2,7 @@
 // Pages import these functions instead of calling fetch() directly —
 // keeps the URL/error-handling logic in one spot.
 
-const BASE_URL = "https://learn-vings-platform.onrender.com";
+const BASE_URL = "http://localhost:8000";
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -75,6 +75,14 @@ export function explainQuestion(questionId, customInstruction) {
     method: "POST",
     body: JSON.stringify({ custom_instruction: customInstruction || null }),
   });
+}
+
+export function getSessionStats() {
+  return request("/stats/sessions");
+}
+
+export function getStatsOverview() {
+  return request("/stats/overview");
 }
 
 export function setFavourite(questionId, favourite) {

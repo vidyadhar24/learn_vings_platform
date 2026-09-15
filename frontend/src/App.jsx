@@ -4,6 +4,7 @@ import QuizPage from "./QuizPage";
 import PreparePage from "./PreparePage";
 import BrowsePage from "./BrowsePage";
 import AdminUploadPage from "./AdminUploadPage";
+import StatsPage from "./StatsPage";
 
 // This component owns the filter selection UI, shared by both modes.
 // Once the user hits "Start", we hand the chosen filters + mode down
@@ -62,6 +63,9 @@ export default function App() {
   if (mode === "admin") {
     return <AdminUploadPage onExit={() => setMode(null)} />;
   }
+  if (mode === "stats") {
+    return <StatsPage onExit={() => setMode(null)} />;
+  }
 
   return (
     <div className="card-stack">
@@ -71,7 +75,8 @@ export default function App() {
         <button className="btn" onClick={() => setMode("quiz")} disabled={mode === "quiz"}>Quiz</button>{" "}
         <button className="btn" onClick={() => setMode("prepare")} disabled={mode === "prepare"}>Prepare</button>{" "}
         <button className="btn" onClick={() => setMode("browse")}>Browse</button>{" "}
-        <button className="btn" onClick={() => setMode("admin")}>Load Data</button>
+        <button className="btn" onClick={() => setMode("admin")}>Load Data</button>{" "}
+        <button className="btn" onClick={() => setMode("stats")}>Stats</button>
       </div>
 
       {mode && (
