@@ -7,11 +7,14 @@ requires-python = ">=3.13"
 dependencies = [
     "sqlalchemy>=2.0",
     "psycopg2-binary",
-    "pydantic>=2.0",
+    "pydantic[email]>=2.0",
     "python-dotenv",
     "fastapi",
     "uvicorn[standard]",
     "python-multipart",
     "openai",
     "slowapi>=0.1.10",
+    "passlib[bcrypt]>=1.7.4",
+    "python-jose[cryptography]>=3.5.0",
+    "bcrypt==4.0.1",
 ]

@@ -3,7 +3,7 @@ and the loader are two different deployables (API server vs. one-off script)."""
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/learning_platform")
 DEFAULT_USER_ID = "local"
@@ -17,3 +17,6 @@ LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY")
 LLM_MODEL = os.environ.get("LLM_MODEL", "gemini-3.5-flash")
 
 ADMIN_SECRET = os.environ.get("ADMIN_SECRET")  # shared secret for gating admin/LLM routes
+print(ADMIN_SECRET)
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+print("JWT_SECRET_KEY loaded:", JWT_SECRET_KEY)

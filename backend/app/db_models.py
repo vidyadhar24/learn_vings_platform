@@ -43,6 +43,17 @@ class Tag(Base):
     name = Column(String, unique=True, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
+class User(Base):
+    """One registered account. Passwords are never stored directly —
+    only a bcrypt hash, so the original can't be recovered even if the
+    database were exposed."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
 
 class QuestionTag(Base):
     """Many-to-many link, scoped per user so tagging is user-specific
@@ -51,7 +62,7 @@ class QuestionTag(Base):
 
     question_id = Column(String, ForeignKey("questions.id"), primary_key=True)
     tag_id = Column(Integer, ForeignKey("tags.id"), primary_key=True)
-    user_id = Column(String, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True) 
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     question = relationship("Question", back_populates="tag_links")
@@ -62,7 +73,7 @@ class QuizAttempt(Base):
     __tablename__ = "quiz_attempts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False) 
     started_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     filters = Column(JSONB)          # the category/subcategory/difficulty picked
     total_questions = Column(Integer)
