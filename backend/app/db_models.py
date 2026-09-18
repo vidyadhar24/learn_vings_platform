@@ -29,7 +29,7 @@ class Question(Base):
     source = Column(String)
     source_url = Column(String)
     rating = Column(Numeric)                         # app-owned after first insert
-    favourite = Column(Boolean, default=False)        # app-owned after first insert
+    #favourite = Column(Boolean, default=False)        # app-owned after first insert, # REMOVED — now per-user, see QuestionFavourite
     duplicate = Column(Boolean, default=False)        # app-owned after first insert
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
@@ -88,3 +88,13 @@ class QuizAttemptAnswer(Base):
     question_id = Column(String, ForeignKey("questions.id"), nullable=False)
     selected_option = Column(String)
     is_correct = Column(Boolean)
+
+class QuestionFavourite(Base):
+    """Per-user favourite marker — same shape as QuestionTag. A row's
+    existence means that user favourited that question; no boolean needed,
+    presence/absence of the row IS the flag."""
+    __tablename__ = "question_favourites"
+
+    question_id = Column(String, ForeignKey("questions.id"), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())

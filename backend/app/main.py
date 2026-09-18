@@ -17,7 +17,7 @@ from sqlalchemy import select, distinct, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .database import get_db
-from .db_models import Question, QuizAttempt, QuizAttemptAnswer, Tag, QuestionTag, User
+from .db_models import Question, QuizAttempt, QuizAttemptAnswer, Tag, QuestionTag, User, QuestionFavourite
 from .schemas_output import QuizQuestionOut, PrepareQuestionOut
 from .schemas_quiz import QuizSubmitIn, QuizSubmitOut, QuizAnswerReview
 from .schemas_tags import TagOut, TagAssignIn, FavouriteIn
@@ -260,14 +260,31 @@ def remove_tag(question_id: str, tag_id: int, db: Session = Depends(get_db)):
 
 
 @app.patch("/questions/{question_id}/favourite")
-def set_favourite(question_id: str, body: FavouriteIn, db: Session = Depends(get_db)):
-    """Toggles favourite on/off. Currently a plain column on Question since
-    it's single-user; if multi-account lands, this moves to a per-user table
-    the same way tags did."""
-    q = _get_question_or_404(db, question_id)
-    q.favourite = body.favourite
+def set_favourite(
+    question_id: str,
+    body: FavouriteIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Favouriting is now per-user: a row's presence in question_favourites
+    IS the flag, scoped to whoever is logged in."""
+    _get_question_or_404(db, question_id)
+
+    if body.favourite:
+        db.execute(
+            pg_insert(QuestionFavourite)
+            .values(question_id=question_id, user_id=current_user.id)
+            .on_conflict_do_nothing(index_elements=["question_id", "user_id"])
+        )
+    else:
+        db.execute(
+            QuestionFavourite.__table__.delete().where(
+                QuestionFavourite.question_id == question_id,
+                QuestionFavourite.user_id == current_user.id,
+            )
+        )
     db.commit()
-    return {"id": q.id, "favourite": q.favourite}
+    return {"id": question_id, "favourite": body.favourite}
 
 
 @app.get("/tags", response_model=list[TagOut])
@@ -278,26 +295,50 @@ def list_all_tags(db: Session = Depends(get_db)):
 
 
 @app.get("/questions/favourites", response_model=list[QuestionSummaryOut])
-def list_favourites(db: Session = Depends(get_db)):
-    """All questions currently marked favourite, mcq and qna mixed together."""
-    rows = db.execute(select(Question).where(Question.favourite == True)).scalars().all()
-    return [QuestionSummaryOut.from_question(q) for q in rows]
+def list_favourites(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """All questions the logged-in user has favourited."""
+    stmt = (
+        select(Question)
+        .join(QuestionFavourite, QuestionFavourite.question_id == Question.id)
+        .where(QuestionFavourite.user_id == current_user.id)
+    )
+    rows = db.execute(stmt).scalars().all()
+    return [QuestionSummaryOut.from_question(q, favourite=True) for q in rows]
 
 
 @app.get("/questions/by-tag", response_model=list[QuestionSummaryOut])
 def list_by_tag(
     tag_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),   # NEW
+    current_user: User = Depends(get_current_user),
 ):
     """All questions carrying a given tag, for the logged-in user."""
     stmt = (
         select(Question)
         .join(QuestionTag, QuestionTag.question_id == Question.id)
-        .where(QuestionTag.tag_id == tag_id, QuestionTag.user_id == current_user.id)   # was: DEFAULT_USER_ID
+        .where(QuestionTag.tag_id == tag_id, QuestionTag.user_id == current_user.id)
     )
     rows = db.execute(stmt).scalars().all()
-    return [QuestionSummaryOut.from_question(q) for q in rows]
+
+    # Look up which of these questions this user has also favourited,
+    # so the tag view can show the correct heart/star state per item.
+    question_ids = [q.id for q in rows]
+    favourited_ids = set(
+        db.execute(
+            select(QuestionFavourite.question_id).where(
+                QuestionFavourite.user_id == current_user.id,
+                QuestionFavourite.question_id.in_(question_ids),
+            )
+        ).scalars().all()
+    )
+
+    return [
+        QuestionSummaryOut.from_question(q, favourite=q.id in favourited_ids)
+        for q in rows
+    ]
 
 
 @app.post("/admin/load")
@@ -312,11 +353,14 @@ async def admin_load_jsonl(request: Request, file: UploadFile = File(...), db: S
     doesn't abort the rest of the file, and every failure is reported
     back with its line number and the actual error, rather than being
     silently skipped.
+
+    Note: tags in the JSONL are NOT auto-created here anymore — tags are
+    now per-user (question_tags.user_id -> users.id), and this route has
+    no logged-in user to attach them to (only the admin secret). Users
+    can tag questions manually via the UI after upload, same as always.
     """
     raw_bytes = await file.read()
-    # Reject oversized uploads before parsing — 5 MB is generous for JSONL
-    # (roughly tens of thousands of lines), well above any real use case here.
-    MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+    MAX_UPLOAD_BYTES = 5 * 1024 * 1024
     if len(raw_bytes) > MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
@@ -339,14 +383,12 @@ async def admin_load_jsonl(request: Request, file: UploadFile = File(...), db: S
             parsed = model_cls(**raw)
             payload = parsed.to_payload()
 
-            # Insert new, or update content only — rating/favourite/duplicate
-            # are left alone on conflict, same rule as the standalone loader.
             stmt = pg_insert(Question).values(
                 id=parsed.id, type=parsed.type, category=parsed.category,
                 subcategory=parsed.subcategory, topic=parsed.topic,
                 difficulty=parsed.difficulty, question=parsed.question,
                 payload=payload, source=parsed.source, source_url=parsed.source_url,
-                favourite=False, duplicate=False,
+                duplicate=False,
             )
             stmt = stmt.on_conflict_do_update(
                 index_elements=["id"],
@@ -359,13 +401,7 @@ async def admin_load_jsonl(request: Request, file: UploadFile = File(...), db: S
                 },
             )
             db.execute(stmt)
-
-            for tag_name in parsed.tags:
-                db.execute(pg_insert(Tag).values(name=tag_name).on_conflict_do_nothing(index_elements=["name"]))
-                tag = db.execute(select(Tag).where(Tag.name == tag_name)).scalar_one()
-                db.execute(pg_insert(QuestionTag).values(
-                    question_id=parsed.id, tag_id=tag.id, user_id=DEFAULT_USER_ID
-                ).on_conflict_do_nothing(index_elements=["question_id", "tag_id", "user_id"]))
+            # Tag auto-creation removed — see docstring note above.
 
             loaded += 1
         except Exception as e:
@@ -445,7 +481,7 @@ def commit_generated(request: Request, body: CommitRequest, db: Session = Depend
             subcategory=item.subcategory, topic=item.topic,
             difficulty=item.difficulty, question=item.question,
             payload=item.payload, source="llm", source_url=None,
-            favourite=False, duplicate=False,
+            duplicate=False,
         )
         # No on_conflict clause needed — ids are freshly minted uuids in
         # /admin/generate, so a collision here would be a genuine bug, not

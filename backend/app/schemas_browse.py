@@ -17,13 +17,14 @@ class QuestionSummaryOut(BaseModel):
     difficulty: Optional[str]
     question: str
     favourite: bool
-    payload: dict  # left as-is (options+correct_option, or answer+examples+code) —
-                    # the frontend already knows how to render each type from Prepare/Quiz
+    payload: dict
 
     @classmethod
-    def from_question(cls, q):
+    def from_question(cls, q, favourite: bool = False):
+        """favourite is now passed in by the caller (looked up per-user),
+        since it's no longer a column on Question itself."""
         return cls(
             id=q.id, type=q.type, category=q.category, subcategory=q.subcategory,
             topic=q.topic, difficulty=q.difficulty, question=q.question,
-            favourite=q.favourite, payload=q.payload,
+            favourite=favourite, payload=q.payload,
         )
