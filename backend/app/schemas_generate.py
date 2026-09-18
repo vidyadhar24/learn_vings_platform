@@ -3,7 +3,7 @@ Schemas for POST /admin/generate (produces a preview, doesn't touch the DB)
 and POST /admin/commit (inserts a previewed batch the user approved).
 """
 from typing import Literal, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class GenerateRequest(BaseModel):
@@ -13,9 +13,11 @@ class GenerateRequest(BaseModel):
     category: str
     subcategory: Optional[str] = None
     topic: Optional[str] = None
-    num_questions: int = 10
     difficulty: str = "mixed"  # "easy" | "medium" | "hard" | "mixed"
     custom_instruction: Optional[str] = None
+    num_questions: int = Field(
+        10, ge=1, le=50, description="Number of questions to generate (max 50 per request)"
+    )
 
 
 class GeneratedQuestionOut(BaseModel):
