@@ -288,7 +288,8 @@ def list_by_tag(tag_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/admin/load")
-async def admin_load_jsonl(file: UploadFile = File(...), db: Session = Depends(get_db),  _: None = Depends(require_admin_secret)):
+@limiter.limit("20/minute")
+async def admin_load_jsonl(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db), _: None = Depends(require_admin_secret)):
     """
     Same job as loader/load.py, but over HTTP instead of a local script —
     useful once the app is deployed and you don't have a terminal handy
@@ -367,7 +368,21 @@ def _extract_jsonl(raw_text: str) -> list[str]:
     the case where the model ignores that and just returns raw lines."""
     fence_match = re.search(r"```[a-zA-Z]*\s*(.*?)```", raw_text, re.DOTALL)
     text = fence_match.group(1) if fence_match else raw_text
-    return [line.strip() for line in text.splitlines() if line.strip()]
+ # Use JSON's own decoder to find each object, instead of assuming
+    # one object per physical line — robust whether the LLM compacts
+    # each object onto one line or pretty-prints it across several.
+    decoder = json.JSONDecoder()
+    lines, pos = [], 0
+    text = text.strip()
+    while pos < len(text):
+        text_from_pos = text[pos:].lstrip()
+        if not text_from_pos:
+            break
+        pos = len(text) - len(text_from_pos)
+        obj, end = decoder.raw_decode(text, pos)
+        lines.append(json.dumps(obj))  # re-serialize to one compact line
+        pos = end
+    return lines
 
 
 @app.post("/admin/generate", response_model=GenerateResponse)
@@ -406,7 +421,8 @@ def generate_questions(request: Request, req: GenerateRequest, db: Session = Dep
 
 
 @app.post("/admin/commit")
-def commit_generated(body: CommitRequest, db: Session = Depends(get_db),_: None = Depends(require_admin_secret)):
+@limiter.limit("20/minute")
+def commit_generated(request: Request, body: CommitRequest, db: Session = Depends(get_db),_: None = Depends(require_admin_secret)):
     """Inserts exactly the previewed items the user approved. No re-validation
     against the LLM needed here — these already passed schema validation in
     /admin/generate; we're just persisting what's already been reviewed."""
