@@ -288,6 +288,15 @@ async def admin_load_jsonl(file: UploadFile = File(...), db: Session = Depends(g
     silently skipped.
     """
     raw_bytes = await file.read()
+    # Reject oversized uploads before parsing — 5 MB is generous for JSONL
+    # (roughly tens of thousands of lines), well above any real use case here.
+    MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+    if len(raw_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large ({len(raw_bytes)} bytes). Max is {MAX_UPLOAD_BYTES} bytes.",
+        )
+
     lines = raw_bytes.decode("utf-8").splitlines()
 
     loaded, errors = 0, []
