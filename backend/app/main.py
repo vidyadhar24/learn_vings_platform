@@ -38,7 +38,7 @@ from slowapi.errors import RateLimitExceeded
 from fastapi import Request
 
 from .schemas_auth import SignupRequest, LoginRequest, TokenResponse
-from .auth import hash_password, verify_password, create_access_token
+from .auth import hash_password, verify_password, create_access_token, get_current_user
 
 from db import init_db
 
@@ -159,7 +159,11 @@ def get_prepare_questions(
 
 
 @app.post("/quiz/submit", response_model=QuizSubmitOut)
-def submit_quiz(submission: QuizSubmitIn, db: Session = Depends(get_db)):
+def submit_quiz(
+    submission: QuizSubmitIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),   # NEW
+):
     """Grades the submission server-side (client never had correct_option),
     saves the attempt for history, and returns the score + a review list
     with correct answers now revealed."""
@@ -175,9 +179,6 @@ def submit_quiz(submission: QuizSubmitIn, db: Session = Depends(get_db)):
         is_correct = ans.selected_option == correct_option
         score += int(is_correct)
 
-        # Options are stored as [{"id": "a", "text": "..."}], so build a
-        # quick id->text lookup to resolve both the user's pick and the
-        # correct one into readable text for the results screen.
         option_text_by_id = {opt["id"]: opt["text"] for opt in q.payload["options"]}
 
         review.append(QuizAnswerReview(
@@ -187,17 +188,16 @@ def submit_quiz(submission: QuizSubmitIn, db: Session = Depends(get_db)):
             is_correct=is_correct, explanation=q.payload.get("explanation"),
         ))
 
-    # Persist the attempt so there's a scoring history (user_id hardcoded
-    # until real accounts exist — see blueprint's multi-account note).
+    # Persist the attempt under the logged-in user's real id.
     attempt = QuizAttempt(
-        user_id=DEFAULT_USER_ID,
+        user_id=current_user.id,   # was: DEFAULT_USER_ID
         filters={"category": submission.category, "subcategory": submission.subcategory,
                  "topic": submission.topic, "difficulty": submission.difficulty},
         total_questions=len(submission.answers),
         score=score,
     )
     db.add(attempt)
-    db.flush()  # assigns attempt.id without committing yet
+    db.flush()
 
     for r in review:
         db.add(QuizAttemptAnswer(
@@ -208,7 +208,6 @@ def submit_quiz(submission: QuizSubmitIn, db: Session = Depends(get_db)):
 
     return QuizSubmitOut(attempt_id=attempt.id, score=score, total=len(submission.answers), review=review)
 
-
 def _get_question_or_404(db: Session, question_id: str) -> Question:
     """Shared lookup used by every per-question endpoint below."""
     q = db.get(Question, question_id)
@@ -218,9 +217,9 @@ def _get_question_or_404(db: Session, question_id: str) -> Question:
 
 
 @app.post("/questions/{question_id}/tags", response_model=TagOut)
-def assign_tag(question_id: str, body: TagAssignIn, db: Session = Depends(get_db)):
+def assign_tag(question_id: str, body: TagAssignIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Creates the tag if it's new (this is what lets a user type a fresh
-    tag name in the UI), then links it to the question for DEFAULT_USER_ID.
+    tag name in the UI), then links it to the question for the logged-in user.
     on_conflict_do_nothing makes re-assigning the same tag a harmless no-op."""
     _get_question_or_404(db, question_id)
 
@@ -228,11 +227,10 @@ def assign_tag(question_id: str, body: TagAssignIn, db: Session = Depends(get_db
     tag = db.execute(select(Tag).where(Tag.name == body.name)).scalar_one()
 
     db.execute(pg_insert(QuestionTag).values(
-        question_id=question_id, tag_id=tag.id, user_id=DEFAULT_USER_ID
+        question_id=question_id, tag_id=tag.id, user_id=current_user.id
     ).on_conflict_do_nothing(index_elements=["question_id", "tag_id", "user_id"]))
     db.commit()
     return TagOut(id=tag.id, name=tag.name)
-
 
 @app.get("/questions/{question_id}/tags", response_model=list[TagOut])
 def list_question_tags(question_id: str, db: Session = Depends(get_db)):
@@ -287,12 +285,16 @@ def list_favourites(db: Session = Depends(get_db)):
 
 
 @app.get("/questions/by-tag", response_model=list[QuestionSummaryOut])
-def list_by_tag(tag_id: int, db: Session = Depends(get_db)):
-    """All questions carrying a given tag, for DEFAULT_USER_ID."""
+def list_by_tag(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),   # NEW
+):
+    """All questions carrying a given tag, for the logged-in user."""
     stmt = (
         select(Question)
         .join(QuestionTag, QuestionTag.question_id == Question.id)
-        .where(QuestionTag.tag_id == tag_id, QuestionTag.user_id == DEFAULT_USER_ID)
+        .where(QuestionTag.tag_id == tag_id, QuestionTag.user_id == current_user.id)   # was: DEFAULT_USER_ID
     )
     rows = db.execute(stmt).scalars().all()
     return [QuestionSummaryOut.from_question(q) for q in rows]
@@ -483,13 +485,14 @@ Give a clear, thorough explanation of the underlying concept — not just why th
 
 
 @app.get("/stats/sessions", response_model=list[SessionSummaryOut])
-def list_sessions(db: Session = Depends(get_db)):
-    """Every past quiz attempt for DEFAULT_USER_ID, most recent first. The
-    data itself has existed since Phase 2 (quiz_attempts) — this is the
-    first thing that actually reads it back."""
+def list_sessions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),   # NEW
+):
+    """Every past quiz attempt for the logged-in user, most recent first."""
     attempts = db.execute(
         select(QuizAttempt)
-        .where(QuizAttempt.user_id == DEFAULT_USER_ID)
+        .where(QuizAttempt.user_id == current_user.id)   # was: DEFAULT_USER_ID
         .order_by(QuizAttempt.started_at.desc())
     ).scalars().all()
 
@@ -506,13 +509,13 @@ def list_sessions(db: Session = Depends(get_db)):
 
 
 @app.get("/stats/overview", response_model=list[CategoryStatsOut])
-def stats_overview(db: Session = Depends(get_db)):
-    """Rolls every attempt up by category — 'you've done Spark 5 times,
-    averaging 72%'. Aggregated in Python rather than SQL since attempt
-    counts are small for a personal project; revisit with a GROUP BY
-    query if this ever needs to scale to many users/attempts."""
+def stats_overview(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),   # NEW
+):
+    """Rolls every attempt up by category for the logged-in user."""
     attempts = db.execute(
-        select(QuizAttempt).where(QuizAttempt.user_id == DEFAULT_USER_ID)
+        select(QuizAttempt).where(QuizAttempt.user_id == current_user.id)   # was: DEFAULT_USER_ID
     ).scalars().all()
 
     by_category = {}

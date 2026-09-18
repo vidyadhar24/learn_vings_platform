@@ -3,6 +3,11 @@ from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from .config import JWT_SECRET_KEY
 
+from fastapi import Header, HTTPException, Depends
+from sqlalchemy.orm import Session
+from .database import get_db
+from .db_models import User
+
 # bcrypt is the industry-standard choice here — deliberately slow by
 # design, which makes brute-forcing stolen hashes impractical.
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -39,3 +44,24 @@ def decode_access_token(token: str) -> int | None:
         return int(payload["sub"])
     except JWTError:
         return None
+
+def get_current_user(
+    authorization: str = Header(...),
+    db: Session = Depends(get_db),
+) -> User:
+    """Reads the 'Authorization: Bearer <token>' header, decodes it, and
+    returns the matching User row. Raises 401 if the header is missing,
+    malformed, the token is invalid/expired, or the user no longer exists."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or malformed Authorization header")
+
+    token = authorization.removeprefix("Bearer ")
+    user_id = decode_access_token(token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User no longer exists")
+
+    return user
