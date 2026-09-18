@@ -15,6 +15,43 @@ async function request(path, options = {}) {
   return res.json();
 }
 
+// Reads the admin secret from sessionStorage, prompting once per browser
+// session if it isn't set yet.
+function getAdminSecret() {
+  let secret = sessionStorage.getItem("adminSecret");
+  if (!secret) {
+    secret = window.prompt("Enter admin secret:");
+    if (secret) sessionStorage.setItem("adminSecret", secret);
+  }
+  return secret;
+}
+
+// Like request(), but attaches the admin header and retries once if the
+// server rejects it with 403 (wrong/stale secret). Throws if the user
+// cancels the prompt, so calling components can catch it and show a message.
+async function adminFetch(path, options = {}) {
+  const secret = getAdminSecret();
+  if (!secret) throw new Error("Admin secret required to perform this action");
+
+  let res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: { ...options.headers, "X-Admin-Secret": secret },
+  });
+
+  if (res.status === 403) {
+    sessionStorage.removeItem("adminSecret");
+    const retrySecret = getAdminSecret();
+    if (!retrySecret) throw new Error("Admin secret required to perform this action");
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers: { ...options.headers, "X-Admin-Secret": retrySecret },
+    });
+  }
+
+  if (!res.ok) throw new Error(`API error ${res.status} on ${path}`);
+  return res.json();
+}
+
 export function getCategories() {
   return request("/categories");
 }
@@ -50,32 +87,43 @@ export function assignTag(questionId, name) {
   });
 }
 
-// Separate from request() because file uploads use FormData, not JSON —
-// the browser sets the correct multipart Content-Type header itself when
-// it sees a FormData body, so we must NOT set "Content-Type: application/json"
-// here the way request() does for everything else.
+// --- Admin / LLM routes — all gated via adminFetch instead of request() ---
+
 export async function uploadJsonl(file) {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch(`${BASE_URL}/admin/load`, { method: "POST", body: formData });
-  if (!res.ok) throw new Error(`Upload failed with status ${res.status}`);
-  return res.json();
+  return adminFetch("/admin/load", { method: "POST", body: formData });
 }
 
 export function generateQuestions(payload) {
-  return request("/admin/generate", { method: "POST", body: JSON.stringify(payload) });
+  return adminFetch("/admin/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function commitGenerated(items) {
-  return request("/admin/commit", { method: "POST", body: JSON.stringify({ items }) });
+  return adminFetch("/admin/commit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
 }
 
 export function explainQuestion(questionId, customInstruction) {
-  return request(`/questions/${questionId}/explain`, {
+  return adminFetch(`/questions/${questionId}/explain`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ custom_instruction: customInstruction || null }),
   });
 }
+
+export function getContentOverview() {
+  return adminFetch("/admin/content-overview");
+}
+
+// --- Everything else, unchanged ---
 
 export function getSessionStats() {
   return request("/stats/sessions");
@@ -83,10 +131,6 @@ export function getSessionStats() {
 
 export function getStatsOverview() {
   return request("/stats/overview");
-}
-
-export function getContentOverview() {
-  return request("/admin/content-overview");
 }
 
 export function setFavourite(questionId, favourite) {

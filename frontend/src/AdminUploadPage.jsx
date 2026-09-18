@@ -36,12 +36,17 @@ function FileUploadTab() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);   // NEW
 
   function handleUpload() {
     if (!file) return;
     setUploading(true);
     setResult(null);
-    uploadJsonl(file).then(setResult).finally(() => setUploading(false));
+    setError(null);   // NEW
+    uploadJsonl(file)
+      .then(setResult)
+      .catch((err) => setError(err.message))   // NEW
+      .finally(() => setUploading(false));
   }
 
   return (
@@ -55,6 +60,7 @@ function FileUploadTab() {
           {uploading ? "Uploading..." : "Upload"}
         </button>
       </div>
+      {error && <p className="admin-error">{error}</p>}
       <UploadResult result={result} />
     </div>
   );
@@ -94,27 +100,34 @@ function GenerateTab() {
   const [preview, setPreview] = useState(null); // { items, errors } from /admin/generate
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState(null);
+  const [error, setError] = useState(null);
 
   function updateField(field, value) {
     setForm({ ...form, [field]: value });
   }
 
   function handleGenerate() {
-    setGenerating(true);
-    setPreview(null);
-    setCommitResult(null);
-    generateQuestions(form).then(setPreview).finally(() => setGenerating(false));
-  }
+  setGenerating(true);
+  setPreview(null);
+  setCommitResult(null);
+  setError(null);
+  generateQuestions(form)
+    .then(setPreview)
+    .catch((err) => setError(err.message))
+    .finally(() => setGenerating(false));
+}
 
-  function handleCommit() {
-    setCommitting(true);
-    commitGenerated(preview.items)
-      .then((res) => {
-        setCommitResult(res);
-        setPreview(null); // once committed, the preview is stale — clear it
-      })
-      .finally(() => setCommitting(false));
-  }
+function handleCommit() {
+  setCommitting(true);
+  setError(null);
+  commitGenerated(preview.items)
+    .then((res) => {
+      setCommitResult(res);
+      setPreview(null);
+    })
+    .catch((err) => setError(err.message))
+    .finally(() => setCommitting(false));
+}
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -187,7 +200,7 @@ function GenerateTab() {
           rows={2}
         />
       </div>
-
+      {error && <p className="admin-error">{error}</p>}
       <button className="btn" onClick={handleGenerate} disabled={!form.category || generating}>
         {generating ? "Generating..." : "Generate"}
       </button>
@@ -244,11 +257,15 @@ function ContentOverviewTab() {
   const [rows, setRows] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [expandedSubcats, setExpandedSubcats] = useState(new Set());
+  const [error, setError] = useState(null); 
 
   useEffect(() => {
-    getContentOverview().then(setRows);
+    getContentOverview()
+      .then(setRows)
+      .catch((err) => setError(err.message));
   }, []);
 
+  if (error) return <p className="admin-error" style={{ marginTop: 16 }}>{error}</p>;
   if (rows === null) return <p style={{ marginTop: 16 }}>Loading...</p>;
 
   const tree = buildTree(rows);
@@ -267,6 +284,7 @@ function ContentOverviewTab() {
 
   return (
     <div style={{ marginTop: 16 }}>
+      {error && <p className="admin-error">{error}</p>}
       {Object.entries(tree).map(([cat, catData]) => (
         <div key={cat} style={{ marginBottom: 8 }}>
           <div
@@ -311,3 +329,4 @@ function ContentOverviewTab() {
     </div>
   );
 }
+

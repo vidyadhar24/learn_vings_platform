@@ -11,6 +11,7 @@ import uuid
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Header, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select, distinct, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -28,6 +29,7 @@ from .schemas_stats import SessionSummaryOut, CategoryStatsOut, ContentCountOut
 from .prompt_builder import build_prompt
 from .llm_client import generate_text
 from .config import DEFAULT_USER_ID
+from .config import ADMIN_SECRET
 
 MODEL_BY_TYPE = {"mcq": MCQInput, "qna": QnAInput}
 
@@ -46,6 +48,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def require_admin_secret(x_admin_secret: str | None = Header(None)):
+    """
+    Dependency that gates admin/LLM routes behind a shared secret.
+    FastAPI reads the 'X-Admin-Secret' header automatically from the
+    param name (x_admin_secret -> X-Admin-Secret). Raises 403 if it
+    doesn't match the server's configured secret.
+    """
+    if x_admin_secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid admin secret")
 
 @app.get("/categories")
 def list_categories(db: Session = Depends(get_db)):
@@ -265,7 +276,7 @@ def list_by_tag(tag_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/admin/load")
-async def admin_load_jsonl(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def admin_load_jsonl(file: UploadFile = File(...), db: Session = Depends(get_db),  _: None = Depends(require_admin_secret)):
     """
     Same job as loader/load.py, but over HTTP instead of a local script —
     useful once the app is deployed and you don't have a terminal handy
@@ -339,7 +350,7 @@ def _extract_jsonl(raw_text: str) -> list[str]:
 
 
 @app.post("/admin/generate", response_model=GenerateResponse)
-def generate_questions(req: GenerateRequest):
+def generate_questions(req: GenerateRequest ,_: None = Depends(require_admin_secret)):
     """Calls the LLM, validates its output, and returns a PREVIEW only —
     nothing is written to the database here. That happens in /admin/commit,
     only once the user has looked at what came back."""
@@ -373,7 +384,7 @@ def generate_questions(req: GenerateRequest):
 
 
 @app.post("/admin/commit")
-def commit_generated(body: CommitRequest, db: Session = Depends(get_db)):
+def commit_generated(body: CommitRequest, db: Session = Depends(get_db),_: None = Depends(require_admin_secret)):
     """Inserts exactly the previewed items the user approved. No re-validation
     against the LLM needed here — these already passed schema validation in
     /admin/generate; we're just persisting what's already been reviewed."""
@@ -394,7 +405,7 @@ def commit_generated(body: CommitRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/questions/{question_id}/explain", response_model=ExplainResponse)
-def explain_question(question_id: str, body: ExplainRequest, db: Session = Depends(get_db)):
+def explain_question(question_id: str, body: ExplainRequest, db: Session = Depends(get_db),_: None = Depends(require_admin_secret)):
     """Generates a deeper explanation on demand. The question/answer is
     looked up from the DB by id (never trusted from the request body) so
     a tampered frontend request can't make this explain something else."""
@@ -474,7 +485,7 @@ def stats_overview(db: Session = Depends(get_db)):
 
 
 @app.get("/admin/content-overview", response_model=list[ContentCountOut])
-def content_overview(db: Session = Depends(get_db)):
+def content_overview(db: Session = Depends(get_db),_: None = Depends(require_admin_secret)):
     """How many questions exist, broken down by category/subcategory/topic/type.
     A real GROUP BY (unlike stats_overview above) since this counts rows in
     the questions table directly rather than aggregating in-memory objects."""
@@ -491,3 +502,4 @@ def content_overview(db: Session = Depends(get_db)):
         ContentCountOut(category=r.category, subcategory=r.subcategory, topic=r.topic, type=r.type, count=r.count)
         for r in rows
     ]
+

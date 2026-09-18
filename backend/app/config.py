@@ -15,3 +15,5 @@ DEFAULT_USER_ID = "local"
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
 LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY")
 LLM_MODEL = os.environ.get("LLM_MODEL", "gemini-3.5-flash")
+
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET")  # shared secret for gating admin/LLM routes
