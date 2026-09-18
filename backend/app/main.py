@@ -31,9 +31,21 @@ from .llm_client import generate_text
 from .config import DEFAULT_USER_ID
 from .config import ADMIN_SECRET
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+from fastapi import Request
+
+
 MODEL_BY_TYPE = {"mcq": MCQInput, "qna": QnAInput}
 
 app = FastAPI(title="Learning Platform API")
+
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Without this, a browser blocks requests from the React dev server (a
 # different origin/port) to this API — CORS is a browser-side security
@@ -359,7 +371,8 @@ def _extract_jsonl(raw_text: str) -> list[str]:
 
 
 @app.post("/admin/generate", response_model=GenerateResponse)
-def generate_questions(req: GenerateRequest ,_: None = Depends(require_admin_secret)):
+@limiter.limit("2/minute")   # LLM calls are costly — cap how often this can be hit
+def generate_questions(request: Request, req: GenerateRequest, db: Session = Depends(get_db), _: None = Depends(require_admin_secret)):
     """Calls the LLM, validates its output, and returns a PREVIEW only —
     nothing is written to the database here. That happens in /admin/commit,
     only once the user has looked at what came back."""

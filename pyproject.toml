@@ -12,5 +12,6 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "python-multipart",
-    "openai"
+    "openai",
+    "slowapi>=0.1.10",
 ]
