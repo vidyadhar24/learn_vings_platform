@@ -221,3 +221,7 @@ export function getContentOverview() {
 export function getAllTags() {
   return request("/tags");
 }
+
+export function getPlatformStats() {
+  return adminFetch("/admin/platform-stats");
+}

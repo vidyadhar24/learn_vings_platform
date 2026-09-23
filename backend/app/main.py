@@ -42,6 +42,9 @@ from .auth import hash_password, verify_password, create_access_token, get_curre
 
 from db import init_db
 
+from datetime import datetime, timedelta
+from .schemas_platform_stats import PlatformStatsOut
+
 
 MODEL_BY_TYPE = {"mcq": MCQInput, "qna": QnAInput}
 
@@ -622,3 +625,39 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     token = create_access_token(user.id)
     return TokenResponse(access_token=token)
 
+@app.get("/admin/platform-stats", response_model=PlatformStatsOut)
+@limiter.limit("20/minute")
+def platform_stats(request: Request, db: Session = Depends(get_db), _: None = Depends(require_admin_secret)):
+    """Platform-wide counts — admin-only, since this reveals info about
+    all users collectively, not just the requester's own data."""
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    week_ago = now - timedelta(days=7)
+
+    total_users = db.execute(select(func.count(User.id))).scalar()
+    new_users_today = db.execute(
+        select(func.count(User.id)).where(User.created_at >= today_start)
+    ).scalar()
+    new_users_this_week = db.execute(
+        select(func.count(User.id)).where(User.created_at >= week_ago)
+    ).scalar()
+
+    total_quiz_attempts = db.execute(select(func.count(QuizAttempt.id))).scalar()
+    quiz_attempts_today = db.execute(
+        select(func.count(QuizAttempt.id)).where(QuizAttempt.started_at >= today_start)
+    ).scalar()
+
+    # distinct() ensures a user who took 5 quizzes this week only counts once
+    active_users_last_7_days = db.execute(
+        select(func.count(func.distinct(QuizAttempt.user_id)))
+        .where(QuizAttempt.started_at >= week_ago)
+    ).scalar()
+
+    return PlatformStatsOut(
+        total_users=total_users,
+        new_users_today=new_users_today,
+        new_users_this_week=new_users_this_week,
+        total_quiz_attempts=total_quiz_attempts,
+        quiz_attempts_today=quiz_attempts_today,
+        active_users_last_7_days=active_users_last_7_days,
+    )

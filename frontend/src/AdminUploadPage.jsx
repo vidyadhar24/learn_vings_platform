@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { uploadJsonl, generateQuestions, commitGenerated, getContentOverview } from "./api";
+import { uploadJsonl, generateQuestions, commitGenerated, getContentOverview, getPlatformStats } from "./api";
 
 export default function AdminUploadPage({ onExit }) {
-  const [tab, setTab] = useState("file"); // "file" | "generate" | "content"
+  const [tab, setTab] = useState("file"); // "file" | "generate" | "content" | "platform"
 
   return (
     <div className="card-stack">
@@ -11,21 +11,25 @@ export default function AdminUploadPage({ onExit }) {
         <h2 style={{ fontFamily: "var(--font-serif)", margin: 0 }}>Load Data</h2>
       </div>
 
-      <div style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button className={`pill-btn ${tab === "file" ? "active" : ""}`} onClick={() => setTab("file")}>
           Upload file
-        </button>{" "}
+        </button>
         <button className={`pill-btn ${tab === "generate" ? "active" : ""}`} onClick={() => setTab("generate")}>
           Generate with LLM
-        </button>{" "}
+        </button>
         <button className={`pill-btn ${tab === "content" ? "active" : ""}`} onClick={() => setTab("content")}>
           Content Overview
+        </button>
+        <button className={`pill-btn ${tab === "platform" ? "active" : ""}`} onClick={() => setTab("platform")}>
+          Platform Stats
         </button>
       </div>
 
       {tab === "file" && <FileUploadTab />}
       {tab === "generate" && <GenerateTab />}
       {tab === "content" && <ContentOverviewTab />}
+      {tab === "platform" && <PlatformStatsTab />}
     </div>
   );
 }
@@ -330,3 +334,42 @@ function ContentOverviewTab() {
   );
 }
 
+
+// Simple label/value grid — no tree structure needed since these are
+// 6 flat numbers, unlike Content Overview's nested category data.
+function PlatformStatsTab() {
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    getPlatformStats()
+      .then(setStats)
+      .catch((err) => setError(err.message));
+  }, []);
+
+  if (error) return <p className="admin-error" style={{ marginTop: 16 }}>{error}</p>;
+  if (stats === null) return <p style={{ marginTop: 16 }}>Loading...</p>;
+
+  const rows = [
+    ["Total users", stats.total_users],
+    ["New users today", stats.new_users_today],
+    ["New users this week", stats.new_users_this_week],
+    ["Total quiz attempts", stats.total_quiz_attempts],
+    ["Quiz attempts today", stats.quiz_attempts_today],
+    ["Active users (last 7 days)", stats.active_users_last_7_days],
+  ];
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      {rows.map(([label, value]) => (
+        <div
+          key={label}
+          style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#EFEAD9", borderRadius: 4, marginBottom: 6 }}
+        >
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
