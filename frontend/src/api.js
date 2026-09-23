@@ -10,7 +10,9 @@ async function request(path, options = {}) {
     ...options,
   });
   if (!res.ok) {
-    throw new Error(`API error ${res.status} on ${path}`);
+    const body = await res.json().catch(() => null);
+    const detail = body?.detail ? (typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)) : `status ${res.status}`;
+    throw new Error(detail);
   }
   return res.json();
 }
@@ -52,6 +54,72 @@ async function adminFetch(path, options = {}) {
   return res.json();
 }
 
+// --- User authentication (JWT-based, separate from the admin secret) ---
+// Stored in localStorage (not sessionStorage) so the user stays logged in
+// across browser restarts, not just within one tab session.
+
+function getAuthToken() {
+  return localStorage.getItem("authToken");
+}
+
+export function setAuthToken(token) {
+  localStorage.setItem("authToken", token);
+}
+
+export function clearAuthToken() {
+  localStorage.removeItem("authToken");
+}
+
+// Like request(), but attaches the logged-in user's token. Used for every
+// route that needs to know WHO is calling (quiz submit, tags, favourites,
+// stats) — distinct from adminFetch, which uses the shared admin secret.
+async function authFetch(path, options = {}) {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error("You must be logged in to do that");
+  }
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",   // NEW — without this, the body is sent as text/plain
+      ...options.headers,
+      authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (res.status === 401) {
+    clearAuthToken();
+    throw new Error("Session expired — please log in again");
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const detail = body?.detail ? JSON.stringify(body.detail) : `status ${res.status}`;
+    throw new Error(`API error on ${path}: ${detail}`);
+  }
+  return res.json();
+}
+
+
+export async function signup(email, password) {
+  const data = await request("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+  setAuthToken(data.access_token);
+  return data;
+}
+
+export async function login(email, password) {
+  const data = await request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+  setAuthToken(data.access_token);
+  return data;
+}
+
 export function getCategories() {
   return request("/categories");
 }
@@ -76,15 +144,40 @@ export function getPrepareQuestions(filters) {
   return request(`/questions/prepare?${params}`);
 }
 
+// --- Routes requiring a logged-in user — via authFetch ---
+
 export function submitQuiz(payload) {
-  return request("/quiz/submit", { method: "POST", body: JSON.stringify(payload) });
+  return authFetch("/quiz/submit", { method: "POST", body: JSON.stringify(payload) });
 }
 
 export function assignTag(questionId, name) {
-  return request(`/questions/${questionId}/tags`, {
+  return authFetch(`/questions/${questionId}/tags`, {
     method: "POST",
     body: JSON.stringify({ name }),
   });
+}
+
+export function setFavourite(questionId, favourite) {
+  return authFetch(`/questions/${questionId}/favourite`, {
+    method: "PATCH",
+    body: JSON.stringify({ favourite }),
+  });
+}
+
+export function getFavourites() {
+  return authFetch("/questions/favourites");
+}
+
+export function getQuestionsByTag(tagId) {
+  return authFetch(`/questions/by-tag?tag_id=${tagId}`);
+}
+
+export function getSessionStats() {
+  return authFetch("/stats/sessions");
+}
+
+export function getStatsOverview() {
+  return authFetch("/stats/overview");
 }
 
 // --- Admin / LLM routes — all gated via adminFetch instead of request() ---
@@ -123,31 +216,8 @@ export function getContentOverview() {
   return adminFetch("/admin/content-overview");
 }
 
-// --- Everything else, unchanged ---
-
-export function getSessionStats() {
-  return request("/stats/sessions");
-}
-
-export function getStatsOverview() {
-  return request("/stats/overview");
-}
-
-export function setFavourite(questionId, favourite) {
-  return request(`/questions/${questionId}/favourite`, {
-    method: "PATCH",
-    body: JSON.stringify({ favourite }),
-  });
-}
-
-export function getFavourites() {
-  return request("/questions/favourites");
-}
+// --- Everything else, unchanged (no login required) ---
 
 export function getAllTags() {
   return request("/tags");
-}
-
-export function getQuestionsByTag(tagId) {
-  return request(`/questions/by-tag?tag_id=${tagId}`);
 }

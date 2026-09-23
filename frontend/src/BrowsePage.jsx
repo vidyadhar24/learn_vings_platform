@@ -6,10 +6,11 @@ import ExplainWithLLM from "./ExplainWithLLM";
 // Two tabs sharing one layout: "Favourites" needs no extra input, "By tag"
 // needs a tag picked first. Both end up rendering the same BrowseItem list.
 export default function BrowsePage({ onExit }) {
-  const [tab, setTab] = useState(null); // null = nothing chosen yet | "favourites" | "tag"
+  const [tab, setTab] = useState(null);
   const [tags, setTags] = useState([]);
   const [selectedTagId, setSelectedTagId] = useState("");
-  const [items, setItems] = useState(null); // null = not loaded yet for this view
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState(null);   // NEW
 
   useEffect(() => {
     getAllTags().then((data) => setTags(data));
@@ -19,15 +20,22 @@ export default function BrowsePage({ onExit }) {
     setTab(nextTab);
     setItems(null);
     setSelectedTagId("");
+    setError(null);
     if (nextTab === "favourites") {
-      getFavourites().then(setItems);
+      getFavourites()
+        .then(setItems)
+        .catch((err) => setError(err.message));
     }
-    // "tag" tab waits for a tag to actually be picked before fetching
   }
 
   function handleTagPick(tagId) {
     setSelectedTagId(tagId);
-    if (tagId) getQuestionsByTag(tagId).then(setItems);
+    setError(null);
+    if (tagId) {
+      getQuestionsByTag(tagId)
+        .then(setItems)
+        .catch((err) => setError(err.message));
+    }
   }
 
   return (
@@ -36,6 +44,8 @@ export default function BrowsePage({ onExit }) {
         <button className="pill-btn" onClick={onExit}>Home</button>
         <h2 style={{ fontFamily: "var(--font-serif)", margin: 0 }}>Browse</h2>
       </div>
+
+      {error && <p className="admin-error" style={{ marginTop: 8 }}>{error}</p>}
 
       <div style={{ marginTop: 16 }}>
         <button className={`pill-btn ${tab === "favourites" ? "active" : ""}`} onClick={() => handleTabClick("favourites")}>
@@ -67,20 +77,28 @@ function BrowseItem({ question }) {
   const [revealed, setRevealed] = useState(false);
   const [isFavourite, setIsFavourite] = useState(question.favourite);
   const [tagInput, setTagInput] = useState("");
+  const [error, setError] = useState(null);
 
   function handleFavourite() {
+    setError(null);   // NEW — clear any stale error from a previous action
     const next = !isFavourite;
-    setFavourite(question.id, next).then(() => setIsFavourite(next));
+    setFavourite(question.id, next)
+      .then(() => setIsFavourite(next))
+      .catch((err) => setError(err.message));
   }
 
   function handleAddTag() {
     if (!tagInput.trim()) return;
-    assignTag(question.id, tagInput.trim()).then(() => setTagInput(""));
+    setError(null);   // NEW
+    assignTag(question.id, tagInput.trim())
+      .then(() => setTagInput(""))
+      .catch((err) => setError(err.message));
   }
 
   return (
     <div style={{ margin: "16px 0", padding: 16, borderRadius: 4, background: "#EFEAD9" }}>
       <p className="question-text" style={{ fontWeight: 600 }}>{question.question}</p>
+      {error && <p className="admin-error">{error}</p>}
 
       {!revealed ? (
         <button className="pill-btn" onClick={() => setRevealed(true)}>Show answer</button>

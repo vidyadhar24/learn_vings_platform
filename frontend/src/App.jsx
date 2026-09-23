@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
-import { getCategories, getSubcategories, getTopics } from "./api";
+import { getCategories, getSubcategories, getTopics, clearAuthToken } from "./api";
 import QuizPage from "./QuizPage";
 import PreparePage from "./PreparePage";
 import BrowsePage from "./BrowsePage";
 import AdminUploadPage from "./AdminUploadPage";
 import StatsPage from "./StatsPage";
+import LoginPage from "./LoginPage";
 
-// This component owns the filter selection UI, shared by both modes.
-// Once the user hits "Start", we hand the chosen filters + mode down
-// to whichever page component takes over.
 export default function App() {
-  const [mode, setMode] = useState(null); // "quiz" | "prepare" | null
+  const [mode, setMode] = useState(null);
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [topics, setTopics] = useState([]);
@@ -23,24 +21,24 @@ export default function App() {
 
   const [started, setStarted] = useState(false);
 
-  // Refetch categories on first mount AND every time the user returns to
-  // Home (mode goes back to null) — otherwise newly uploaded categories
-  // wouldn't show up until a full page reload.
+  // Just checks whether a token exists — doesn't validate it against the
+  // backend here; an expired/invalid token gets caught the moment a
+  // protected route is actually called (authFetch handles that in api.js).
+  const [loggedIn, setLoggedIn] = useState(!!localStorage.getItem("authToken"));
+
   useEffect(() => {
     if (mode === null) {
       getCategories().then((data) => setCategories(data.categories));
     }
   }, [mode]);
 
-  // Re-fetch subcategories whenever the chosen category changes.
   useEffect(() => {
     if (!category) return;
-    setSubcategory(""); // reset downstream selections
+    setSubcategory("");
     setTopic("");
     getSubcategories(category).then((data) => setSubcategories(data.subcategories));
   }, [category]);
 
-  // Re-fetch topics whenever category or subcategory changes.
   useEffect(() => {
     if (!category) return;
     setTopic("");
@@ -49,6 +47,11 @@ export default function App() {
 
   const filters = { category, subcategory, topic, difficulty, limit: numQuestions };
 
+  function handleLogout() {
+    clearAuthToken();
+    setLoggedIn(false);
+  }
+
   if (started && mode === "quiz") {
     return <QuizPage filters={filters} onExit={() => setStarted(false)} />;
   }
@@ -56,8 +59,6 @@ export default function App() {
     return <PreparePage filters={filters} onExit={() => setStarted(false)} />;
   }
   if (mode === "browse") {
-    // Browse doesn't need category filters — it's driven by favourite/tag,
-    // so it renders immediately instead of going through the filter step.
     return <BrowsePage onExit={() => setMode(null)} />;
   }
   if (mode === "admin") {
@@ -66,9 +67,28 @@ export default function App() {
   if (mode === "stats") {
     return <StatsPage onExit={() => setMode(null)} />;
   }
+  if (mode === "login") {
+    return (
+      <LoginPage
+        onExit={() => setMode(null)}
+        onSuccess={() => {
+          setLoggedIn(true);
+          setMode(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="card-stack">
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        {loggedIn ? (
+          <button className="btn-secondary" onClick={handleLogout}>Log out</button>
+        ) : (
+          <button className="btn-secondary" onClick={() => setMode("login")}>Log in / Sign up</button>
+        )}
+      </div>
+
       <h1 style={{ fontFamily: "var(--font-serif)", marginTop: 0 }}>Learning Platform</h1>
 
       <div>

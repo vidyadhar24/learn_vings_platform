@@ -34,8 +34,9 @@ export default function QuizPage({ filters, onExit }) {
     setSelected("");
 
     if (isLastQuestion) {
-      // Submit only once, after the final question is answered.
-      submitQuiz({ ...filters, answers: updatedAnswers }).then(setResult);
+      submitQuiz({ ...filters, answers: updatedAnswers })
+        .then(setResult)
+        .catch((err) => alert(err.message));   // temporary — surfaces the real error instead of silence
     } else {
       setAnswers(updatedAnswers);
       setIndex(index + 1);
@@ -136,4 +137,18 @@ function ReviewItem({ review: r }) {
       </div>
     </div>
   );
+}
+
+function handleNext() {
+  const updatedAnswers = [...answers, { question_id: current.id, selected_option: selected }];
+  setSelected("");
+
+  if (isLastQuestion) {
+    submitQuiz({ ...filters, answers: updatedAnswers })
+      .then(setResult)
+      .catch((err) => alert(err.message));   // temporary — surfaces the real error instead of silence
+  } else {
+    setAnswers(updatedAnswers);
+    setIndex(index + 1);
+  }
 }
