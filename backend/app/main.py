@@ -17,7 +17,7 @@ from sqlalchemy import select, distinct, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .database import get_db
-from .db_models import Question, QuizAttempt, QuizAttemptAnswer, Tag, QuestionTag, User, QuestionFavourite
+from .db_models import Question, QuizAttempt, QuizAttemptAnswer, Tag, QuestionTag, User, QuestionFavourite, QuestionRating
 from .schemas_output import QuizQuestionOut, PrepareQuestionOut
 from .schemas_quiz import QuizSubmitIn, QuizSubmitOut, QuizAnswerReview
 from .schemas_tags import TagOut, TagAssignIn, FavouriteIn
@@ -38,12 +38,14 @@ from slowapi.errors import RateLimitExceeded
 from fastapi import Request
 
 from .schemas_auth import SignupRequest, LoginRequest, TokenResponse
-from .auth import hash_password, verify_password, create_access_token, get_current_user
+from .auth import hash_password, verify_password, create_access_token, get_current_user, get_current_user_optional
 
 from db import init_db
 
 from datetime import datetime, timedelta
 from .schemas_platform_stats import PlatformStatsOut
+
+from .schemas_rating import RatingIn, RatingOut
 
 
 MODEL_BY_TYPE = {"mcq": MCQInput, "qna": QnAInput}
@@ -117,12 +119,16 @@ def get_quiz_questions(
     subcategory: Optional[str] = None,
     topic: Optional[str] = None,
     difficulty: Optional[str] = None,
+    min_rating: Optional[int] = None,
+    max_rating: Optional[int] = None,
     limit: int = 10,
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Random batch of MCQs matching the chosen filters, answer hidden.
-    ORDER BY random() is fine at this data size; revisit if the table
-    grows into the millions of rows (it'd get slow to scan/sort)."""
+    min_rating/max_rating filter by the logged-in user's own difficulty
+    rating (1-4) on each question — requires login; silently ignored if
+    not logged in."""
     stmt = select(Question).where(Question.type == "mcq", Question.category == category)
     if subcategory:
         stmt = stmt.where(Question.subcategory == subcategory)
@@ -130,6 +136,16 @@ def get_quiz_questions(
         stmt = stmt.where(Question.topic == topic)
     if difficulty:
         stmt = stmt.where(Question.difficulty == difficulty)
+
+    if current_user and (min_rating is not None or max_rating is not None):
+        stmt = stmt.join(QuestionRating, QuestionRating.question_id == Question.id).where(
+            QuestionRating.user_id == current_user.id
+        )
+        if min_rating is not None:
+            stmt = stmt.where(QuestionRating.rating >= min_rating)
+        if max_rating is not None:
+            stmt = stmt.where(QuestionRating.rating <= max_rating)
+
     stmt = stmt.order_by(func.random()).limit(limit)
 
     rows = db.execute(stmt).scalars().all()
@@ -142,12 +158,13 @@ def get_prepare_questions(
     subcategory: Optional[str] = None,
     topic: Optional[str] = None,
     difficulty: Optional[str] = None,
+    min_rating: Optional[int] = None,
+    max_rating: Optional[int] = None,
     limit: int = 10,
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Same filter logic as the quiz endpoint, but for qna rows, and the
-    full payload (answer/examples/code) is returned — Prepare mode is
-    meant to show it, just collapsed behind a toggle in the UI."""
+    """Same filter logic as the quiz endpoint, but for qna rows."""
     stmt = select(Question).where(Question.type == "qna", Question.category == category)
     if subcategory:
         stmt = stmt.where(Question.subcategory == subcategory)
@@ -155,11 +172,20 @@ def get_prepare_questions(
         stmt = stmt.where(Question.topic == topic)
     if difficulty:
         stmt = stmt.where(Question.difficulty == difficulty)
+
+    if current_user and (min_rating is not None or max_rating is not None):
+        stmt = stmt.join(QuestionRating, QuestionRating.question_id == Question.id).where(
+            QuestionRating.user_id == current_user.id
+        )
+        if min_rating is not None:
+            stmt = stmt.where(QuestionRating.rating >= min_rating)
+        if max_rating is not None:
+            stmt = stmt.where(QuestionRating.rating <= max_rating)
+
     stmt = stmt.limit(limit)
 
     rows = db.execute(stmt).scalars().all()
     return [PrepareQuestionOut.from_question(q) for q in rows]
-
 
 @app.post("/quiz/submit", response_model=QuizSubmitOut)
 def submit_quiz(
@@ -661,3 +687,26 @@ def platform_stats(request: Request, db: Session = Depends(get_db), _: None = De
         quiz_attempts_today=quiz_attempts_today,
         active_users_last_7_days=active_users_last_7_days,
     )
+
+@app.patch("/questions/{question_id}/rating", response_model=RatingOut)
+def set_rating(
+    question_id: str,
+    body: RatingIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Saves or updates the logged-in user's difficulty rating (1-4) for
+    a question. Re-rating just overwrites the previous value and bumps
+    rated_at (see the model's onupdate)."""
+    _get_question_or_404(db, question_id)
+
+    stmt = pg_insert(QuestionRating).values(
+        question_id=question_id, user_id=current_user.id, rating=body.rating
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["question_id", "user_id"],
+        set_={"rating": stmt.excluded.rating},
+    )
+    db.execute(stmt)
+    db.commit()
+    return RatingOut(question_id=question_id, rating=body.rating)

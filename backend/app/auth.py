@@ -65,3 +65,17 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="User no longer exists")
 
     return user
+
+def get_current_user_optional(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Like get_current_user, but returns None instead of raising when
+    there's no token — for routes usable both logged-out and logged-in,
+    where login only unlocks extra functionality (e.g. rating filters)."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    user_id = decode_access_token(authorization.removeprefix("Bearer "))
+    if user_id is None:
+        return None
+    return db.get(User, user_id)

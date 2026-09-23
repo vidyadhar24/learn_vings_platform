@@ -98,3 +98,15 @@ class QuestionFavourite(Base):
     question_id = Column(String, ForeignKey("questions.id"), primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+class QuestionRating(Base):
+    """Per-user difficulty rating on a question: 1=Again, 2=Hard, 3=Good,
+    4=Easy — matches the scale spaced-repetition algorithms (e.g. SM-2)
+    expect, so this table can grow into that later without a rewrite.
+    One row per user per question; rating it again just updates the row."""
+    __tablename__ = "question_ratings"
+
+    question_id = Column(String, ForeignKey("questions.id"), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    rating = Column(Integer, nullable=False)  # 1-4
+    rated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
