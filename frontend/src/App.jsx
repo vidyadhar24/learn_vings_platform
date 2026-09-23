@@ -20,6 +20,7 @@ export default function App() {
   const [numQuestions, setNumQuestions] = useState(10);
 
   const [started, setStarted] = useState(false);
+  const [ratingFilter, setRatingFilter] = useState(""); // "" | "1" | "2" | "3" | "4"
 
   // Just checks whether a token exists — doesn't validate it against the
   // backend here; an expired/invalid token gets caught the moment a
@@ -45,7 +46,10 @@ export default function App() {
     getTopics(category, subcategory).then((data) => setTopics(data.topics));
   }, [category, subcategory]);
 
-  const filters = { category, subcategory, topic, difficulty, limit: numQuestions };
+const filters = {
+  category, subcategory, topic, difficulty, limit: numQuestions,
+  ...(ratingFilter ? { max_rating: ratingFilter } : {}),
+};
 
   function handleLogout() {
     clearAuthToken();
@@ -134,6 +138,17 @@ export default function App() {
               max={50}
               style={{ width: 60 }}
             />
+          </div>
+
+          <div style={{ marginTop: 8 }}>
+            <label className="field-label">Revisit questions rated</label>
+            <select value={ratingFilter} onChange={(e) => setRatingFilter(e.target.value)}>
+              <option value="">All questions (no rating filter)</option>
+              <option value="1">Again only</option>
+              <option value="2">Hard or worse (Again + Hard)</option>
+              <option value="3">Good or worse (Again + Hard + Good)</option>
+              <option value="4">Any rated question (Again + Hard + Good + Easy)</option>
+            </select>
           </div>
 
           <button className="btn" style={{ marginTop: 16 }} onClick={() => setStarted(true)} disabled={!category}>

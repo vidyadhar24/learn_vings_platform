@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getQuizQuestions, submitQuiz, setFavourite, assignTag } from "./api";
 import ExplainWithLLM from "./ExplainWithLLM";
+import RatingWidget from "./RatingWidget";
 
 // Three states this component can be in:
 // "loading" -> "answering" (one question shown at a time) -> "results"
@@ -122,6 +123,7 @@ function ReviewItem({ review: r }) {
       {r.explanation && <p style={{ color: "var(--ink-muted)" }}><em>{r.explanation}</em></p>}
 
       <ExplainWithLLM questionId={r.question_id} />
+      <RatingWidget questionId={r.question_id} />
 
       <div className="card-actions">
         <button className={`pill-btn ${isFavourite ? "active" : ""}`} onClick={handleFavourite}>

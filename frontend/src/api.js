@@ -101,6 +101,12 @@ async function authFetch(path, options = {}) {
   return res.json();
 }
 
+export function setRating(questionId, rating) {
+  return authFetch(`/questions/${questionId}/rating`, {
+    method: "PATCH",
+    body: JSON.stringify({ rating }),
+  });
+}
 
 export async function signup(email, password) {
   const data = await request("/auth/signup", {
@@ -136,12 +142,12 @@ export function getTopics(category, subcategory) {
 
 export function getQuizQuestions(filters) {
   const params = new URLSearchParams(filters);
-  return request(`/questions/quiz?${params}`);
+  return requestWithOptionalAuth(`/questions/quiz?${params}`);
 }
 
 export function getPrepareQuestions(filters) {
   const params = new URLSearchParams(filters);
-  return request(`/questions/prepare?${params}`);
+  return requestWithOptionalAuth(`/questions/prepare?${params}`);
 }
 
 // --- Routes requiring a logged-in user — via authFetch ---
@@ -216,7 +222,6 @@ export function getContentOverview() {
   return adminFetch("/admin/content-overview");
 }
 
-// --- Everything else, unchanged (no login required) ---
 
 export function getAllTags() {
   return request("/tags");
@@ -224,4 +229,17 @@ export function getAllTags() {
 
 export function getPlatformStats() {
   return adminFetch("/admin/platform-stats");
+}
+
+// Like request(), but attaches the token when logged in — used for routes
+// that work both logged-out AND logged-in, where login only unlocks
+// extra filtering (e.g. rating-based filters on quiz/prepare).
+async function requestWithOptionalAuth(path, options = {}) {
+  const token = getAuthToken();
+  const headers = { "Content-Type": "application/json", ...options.headers };
+  if (token) headers.authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  if (!res.ok) throw new Error(`API error ${res.status} on ${path}`);
+  return res.json();
 }
