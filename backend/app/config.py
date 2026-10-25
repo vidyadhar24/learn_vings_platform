@@ -17,6 +17,4 @@ LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY")
 LLM_MODEL = os.environ.get("LLM_MODEL", "gemini-3.5-flash")
 
 ADMIN_SECRET = os.environ.get("ADMIN_SECRET")  # shared secret for gating admin/LLM routes
-print(ADMIN_SECRET)
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
-print("JWT_SECRET_KEY loaded:", JWT_SECRET_KEY)

@@ -40,7 +40,7 @@ from fastapi import Request
 from .schemas_auth import SignupRequest, LoginRequest, TokenResponse
 from .auth import hash_password, verify_password, create_access_token, get_current_user, get_current_user_optional
 
-from db import init_db
+from .database import init_db
 
 from datetime import datetime, timedelta
 from .schemas_platform_stats import PlatformStatsOut

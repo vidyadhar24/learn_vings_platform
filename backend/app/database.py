@@ -9,9 +9,15 @@ dependency injection (`Depends(get_db)`) handles that lifecycle for us.
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from .config import DATABASE_URL
+from .db_models import Base   # NEW: the metadata that knows every table
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
+
+def init_db():
+    """Creates any tables that don't exist yet, called once at app startup.
+    create_all only ADDS missing tables; it never alters existing ones."""
+    Base.metadata.create_all(engine)
 
 
 def get_db():
