@@ -441,25 +441,21 @@ async def admin_load_jsonl(request: Request, file: UploadFile = File(...), db: S
 
 
 def _extract_jsonl(raw_text: str) -> list[str]:
-    """Pulls JSONL lines out of the LLM's response. Handles the case where
-    it's wrapped in a ```...``` fence (asked for in the prompt) as well as
-    the case where the model ignores that and just returns raw lines."""
     fence_match = re.search(r"```[a-zA-Z]*\s*(.*?)```", raw_text, re.DOTALL)
     text = fence_match.group(1) if fence_match else raw_text
- # Use JSON's own decoder to find each object, instead of assuming
-    # one object per physical line — robust whether the LLM compacts
-    # each object onto one line or pretty-prints it across several.
+
     decoder = json.JSONDecoder()
     lines, pos = [], 0
-    text = text.strip()
     while pos < len(text):
-        text_from_pos = text[pos:].lstrip()
-        if not text_from_pos:
+        start = text.find("{", pos)   # jump to the next object, skipping stray text/commas
+        if start == -1:
             break
-        pos = len(text) - len(text_from_pos)
-        obj, end = decoder.raw_decode(text, pos)
-        lines.append(json.dumps(obj))  # re-serialize to one compact line
-        pos = end
+        try:
+            obj, end = decoder.raw_decode(text, start)
+            lines.append(json.dumps(obj))   # re-serialise as one compact line
+            pos = end
+        except json.JSONDecodeError:
+            pos = start + 1   # malformed object: step past its '{' and keep scanning
     return lines
 
 
